@@ -1,0 +1,6 @@
+project_dir: projects/sample_project
+max_results_per_query: 25
+openalex_email: ""
+unpaywall_email: ""
+user_agent: "ResearchAgent/0.1 (mailto:your_email@example.com)"
+request_delay_seconds: 1.0
