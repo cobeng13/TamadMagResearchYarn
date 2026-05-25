@@ -1,6 +1,32 @@
 project_dir: projects/sample_project
 max_results_per_query: 25
-openalex_email: ""
-unpaywall_email: ""
+
+# Contact and API credentials
+contact_email: "your_email@example.com"
+openalex_api_key: ""
+semantic_scholar_api_key: ""
+ncbi_api_key: ""
+ncbi_tool: "research_agent"
+core_api_key: ""
+crossref_plus_api_key: ""
+
+# Provider-specific contact fields. These can usually match contact_email.
+openalex_email: "your_email@example.com"
+unpaywall_email: "your_email@example.com"
+crossref_email: "your_email@example.com"
+
+# HTTP behavior
 user_agent: "ResearchAgent/0.1 (mailto:your_email@example.com)"
 request_delay_seconds: 1.0
+max_retries: 3
+retry_backoff_seconds: 1.0
+
+# Provider toggles
+enable_openalex: true
+enable_crossref: true
+enable_unpaywall: true
+enable_semantic_scholar: true
+enable_pubmed: true
+enable_europe_pmc: true
+enable_arxiv: true
+enable_core: true

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import time
 from datetime import datetime
@@ -78,7 +79,19 @@ def ensure_candidate_file(path: Path) -> pd.DataFrame:
 
 
 def crossref_headers(config: dict[str, Any]) -> dict[str, str]:
-    return {"User-Agent": config.get("user_agent") or "ResearchAgent/0.1"}
+    headers = {"User-Agent": config.get("user_agent") or "ResearchAgent/0.1"}
+    plus_key = os.getenv("CROSSREF_PLUS_API_KEY") or config.get("crossref_plus_api_key") or ""
+    if plus_key:
+        headers["Crossref-Plus-API-Token"] = f"Bearer {plus_key}"
+    return headers
+
+
+def crossref_params(config: dict[str, Any], extra: dict[str, Any] | None = None) -> dict[str, Any]:
+    params = dict(extra or {})
+    email = os.getenv("CROSSREF_EMAIL") or os.getenv("CONTACT_EMAIL") or config.get("crossref_email") or config.get("contact_email") or ""
+    if email:
+        params["mailto"] = email
+    return params
 
 
 def parse_crossref_item(item: dict[str, Any]) -> dict[str, str]:
@@ -101,6 +114,7 @@ def parse_crossref_item(item: dict[str, Any]) -> dict[str, str]:
 def fetch_by_doi(doi: str, config: dict[str, Any]) -> dict[str, str] | None:
     response = requests.get(
         f"https://api.crossref.org/works/{doi}",
+        params=crossref_params(config),
         headers=crossref_headers(config),
         timeout=30,
     )
@@ -113,7 +127,7 @@ def fetch_by_doi(doi: str, config: dict[str, Any]) -> dict[str, str] | None:
 def fetch_by_title(title: str, config: dict[str, Any]) -> dict[str, str] | None:
     response = requests.get(
         "https://api.crossref.org/works",
-        params={"query.bibliographic": title, "rows": 1},
+        params=crossref_params(config, {"query.bibliographic": title, "rows": 1}),
         headers=crossref_headers(config),
         timeout=30,
     )

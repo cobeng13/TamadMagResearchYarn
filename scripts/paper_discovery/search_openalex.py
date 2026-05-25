@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import re
 import time
 from datetime import datetime
@@ -122,7 +123,11 @@ def existing_candidates(path: Path) -> pd.DataFrame:
 
 def request_openalex(query: str, max_results: int, config: dict[str, Any]) -> list[dict[str, Any]]:
     params = {"search": query, "per-page": max_results}
-    email = config.get("openalex_email")
+    api_key = os.getenv("OPENALEX_API_KEY") or config.get("openalex_api_key") or ""
+    if not api_key:
+        raise ValueError("OpenAlex requires an API key. Set OPENALEX_API_KEY or config.yaml openalex_api_key.")
+    params["api_key"] = api_key
+    email = os.getenv("CONTACT_EMAIL") or config.get("contact_email") or config.get("openalex_email")
     if email:
         params["mailto"] = email
     headers = {"User-Agent": config.get("user_agent") or "ResearchAgent/0.1"}

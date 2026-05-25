@@ -1,0 +1,2 @@
+"""Paper discovery package."""
+

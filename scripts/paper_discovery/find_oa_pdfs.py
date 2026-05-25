@@ -95,7 +95,7 @@ def main() -> None:
 
     config = load_config(args.config)
     project_dir = resolve_project(args.project, config)
-    email = os.getenv("UNPAYWALL_EMAIL") or config.get("unpaywall_email") or ""
+    email = os.getenv("UNPAYWALL_EMAIL") or os.getenv("CONTACT_EMAIL") or config.get("unpaywall_email") or config.get("contact_email") or ""
     if not email:
         log(project_dir, "Missing UNPAYWALL_EMAIL or unpaywall_email in config.")
         raise SystemExit("Unpaywall requires an email. Set UNPAYWALL_EMAIL or config.yaml unpaywall_email.")

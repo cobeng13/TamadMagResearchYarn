@@ -35,10 +35,21 @@ This is not a fully automated web research bot or submission system. The prompt-
 - It does not automatically search the web unless a user explicitly asks an agent to browse in the current task or runs the paper discovery scripts.
 - It does not download papers by default. The optional downloader only downloads legal open-access PDF URLs found through Unpaywall.
 - It does not bypass publisher access controls, use Sci-Hub, or fetch illegal copies.
+- It does not currently call the ChatGPT/OpenAI API by itself. The prompt agents generate or define prompts, but a user still runs those prompts in an LLM environment and saves the resulting files.
+- It does not currently include an automated PDF/HTML-to-markdown converter script. Document ingestion is defined as a prompt-guided workflow stage, not as a finished local converter.
 - It does not invent missing source metadata, citations, DOIs, URLs, statistics, sample sizes, p-values, coefficients, or conclusions.
 - It does not run statistical analysis unless explicitly extended or instructed to do so.
 - It does not submit, publish, email, or upload manuscripts.
 - It does not currently include a dedicated Methodology Writer Agent. The workflow defines a standard manual methodology draft path: `projects/sample_project/09_drafts/methodology/methodology_draft.md`.
+
+## Current Automation Status
+
+The repository currently has two levels of automation:
+
+- **Implemented local/API scripts**: the research brief helper creates a prompt file from study notes, and the paper discovery scripts can query scholarly APIs, normalize metadata, deduplicate/rank candidate papers, identify legal OA links, and optionally download legal OA PDFs.
+- **Prompt-guided workflow stages**: literature screening, source collection decisions, document ingestion to markdown, citation metadata extraction, evidence extraction, synthesis, drafting, and audits are currently specified by agent prompts. A user or LLM environment must run those prompts and save the requested files.
+
+In practical terms, paper finding is partly automated, but manuscript writing and document conversion are not yet fully autonomous.
 
 ## Repository Layout
 
@@ -289,7 +300,7 @@ projects/sample_project/02_sources/html/
 projects/sample_project/02_sources/other/
 ```
 
-Then run the document ingestion agent. If no source files are available, ingestion creates templates and logs that the stage is blocked.
+Then run the document ingestion prompt or manually convert the files into the expected markdown folders. If no source files are available, the prompt-guided ingestion stage should create templates and logs that the stage is blocked.
 
 ## Optional API-Assisted Paper Discovery
 
@@ -297,9 +308,14 @@ The `scripts/paper_discovery/` tools add a controlled API layer before source co
 
 ### APIs Used
 
-- **OpenAlex Works API**: searches for candidate papers from queries in `01_literature_search/search_queries.md`. Results are written to `01_literature_search/candidate_papers.csv` with `screening_status` set to `unscreened`.
-- **Crossref REST API**: enriches candidate rows by DOI or title. It fills missing DOI, title, author, year, journal/source, and URL fields where Crossref has a confident match.
-- **Unpaywall API**: checks candidate DOIs for legal open-access full text. It writes OA landing-page and PDF URLs to `02_sources/download_queue.csv`. Unpaywall requires an email address.
+- **OpenAlex Works API**: searches for candidate papers from queries in `01_literature_search/search_queries.md`. OpenAlex requires a free API key. Results are written to `01_literature_search/candidate_papers.csv` with `screening_status` set to `unscreened`.
+- **Crossref REST API**: enriches candidate rows by DOI or title. It fills missing DOI, title, author, year, journal/source, and URL fields where Crossref has a confident match. Public Crossref access does not require a key, but a polite email is recommended; Crossref Metadata Plus users may provide an optional API token.
+- **Unpaywall API**: checks candidate DOIs for legal open-access full text. It writes OA landing-page and PDF URLs to `02_sources/download_queue.csv`. Unpaywall requires an email parameter.
+- **Semantic Scholar Graph API**: searches papers and returns citation/reference counts, fields of study, external IDs, and open-access PDF links when available. `SEMANTIC_SCHOLAR_API_KEY` is optional and sent as `x-api-key`.
+- **PubMed / NCBI E-utilities**: searches PubMed with ESearch and retrieves batched metadata with EFetch. `NCBI_API_KEY` is optional; `NCBI_TOOL` and `CONTACT_EMAIL` are supported.
+- **Europe PMC REST API**: searches biomedical and open-access records. No API key is required.
+- **arXiv API**: searches preprint metadata and links. No API key is required; the provider enforces a minimum 3-second request interval and does not mass-download PDFs.
+- **CORE API**: searches repository/full-text records. `CORE_API_KEY` is optional and sent when present.
 - **Direct PDF HTTP requests**: `download_pdfs.py` downloads only the `pdf_url` values already recorded in `download_queue.csv`, then saves files under `02_sources/pdf/`.
 
 The API scripts use `requests`, `pandas`, `PyYAML`, `python-slugify`, and `tqdm` from `requirements.txt`. They respect a configurable request delay and write activity to `logs/paper_discovery_log.md`.
@@ -326,11 +342,76 @@ pip install -r requirements.txt
 Copy-Item scripts\paper_discovery\config.example.yaml scripts\paper_discovery\config.yaml
 ```
 
-Set `unpaywall_email` in `config.yaml`, or set:
+Set `openalex_api_key`, `unpaywall_email`, and your contact email fields in `config.yaml`:
+
+```yaml
+project_dir: projects/sample_project
+max_results_per_query: 25
+openalex_api_key: "your_openalex_api_key"
+semantic_scholar_api_key: ""
+ncbi_api_key: ""
+ncbi_tool: "research_agent"
+contact_email: "your_email@example.com"
+openalex_email: "your_email@example.com"
+unpaywall_email: "your_email@example.com"
+crossref_email: "your_email@example.com"
+crossref_plus_api_key: ""
+core_api_key: ""
+user_agent: "ResearchAgent/0.1 (mailto:your_email@example.com)"
+request_delay_seconds: 1.0
+```
+
+You can also set secrets and contact details with environment variables:
 
 ```powershell
+$env:OPENALEX_API_KEY="your_openalex_api_key"
+$env:SEMANTIC_SCHOLAR_API_KEY="your_semantic_scholar_key"
+$env:NCBI_API_KEY="your_ncbi_key"
+$env:NCBI_TOOL="research_agent"
+$env:CONTACT_EMAIL="your_email@example.com"
 $env:UNPAYWALL_EMAIL="your_email@example.com"
+$env:CROSSREF_EMAIL="your_email@example.com"
+$env:CROSSREF_PLUS_API_KEY="your_crossref_plus_token"
+$env:CORE_API_KEY="your_core_key"
 ```
+
+`CROSSREF_PLUS_API_KEY` is optional and only applies if you subscribe to Crossref Metadata Plus.
+
+Provider toggles are supported through:
+
+```text
+ENABLE_OPENALEX=true
+ENABLE_CROSSREF=true
+ENABLE_UNPAYWALL=true
+ENABLE_SEMANTIC_SCHOLAR=true
+ENABLE_PUBMED=true
+ENABLE_EUROPE_PMC=true
+ENABLE_ARXIV=true
+ENABLE_CORE=true
+```
+
+### Multi-Provider Search CLI
+
+Search all enabled providers:
+
+```powershell
+python -m scripts.paper_discovery.search "radiologic technologist licensure examination academic performance" --limit 20
+```
+
+Search selected providers and export normalized results:
+
+```powershell
+python -m scripts.paper_discovery.search "licensure exam predictors" --providers openalex,semantic_scholar,pubmed --year-from 2020 --year-to 2026 --export projects/sample_project/01_literature_search/provider_results.csv
+```
+
+The multi-provider search layer normalizes results into one `Paper` schema, deduplicates by DOI, PMID, PMCID, arXiv ID, normalized title/year, and high-confidence fuzzy title match, then ranks candidates using query relevance, citation counts, recency, full-text availability, and a biomedical-source boost for PubMed and Europe PMC.
+
+Rate-limit behavior:
+
+- PubMed uses about 3 requests/second without `NCBI_API_KEY` and 10 requests/second with one.
+- arXiv is limited to one request every 3 seconds.
+- HTTP calls use timeouts and retry 429/5xx responses with exponential backoff.
+- Metadata links are safe to store, but PDFs should only be downloaded when license or open-access status allows it.
 
 4. Run the full discovery pipeline:
 
@@ -415,7 +496,7 @@ It only includes sources that are locally present, manually supplied, or already
 
 ### Document Ingestion Agent
 
-Converts available source documents to markdown for downstream agents.
+Defines the prompt-guided process for converting available source documents to markdown for downstream agents. This repository does not yet include a standalone local converter script for PDFs, HTML captures, or other document formats.
 
 Outputs:
 
@@ -425,6 +506,8 @@ Outputs:
 - `ingestion_log.md`
 
 It flags scanned PDFs, poor OCR, damaged tables, missing references, scrambled text order, corrupted characters, and other conversion issues.
+
+Until a converter script is added, use this stage by running the prompt in an LLM-capable environment or by manually creating the expected markdown, manifest, and log files.
 
 ### Citation and Metadata Agent
 
@@ -645,7 +728,7 @@ The sample project brief is already aligned to:
 
 Downstream literature search, source collection, ingestion, metadata, extraction, synthesis, drafting, audit, and final assembly folders may need to be created by running the matching prompt agents.
 
-The optional paper discovery scripts are present under `scripts/paper_discovery/`. They can populate `01_literature_search/candidate_papers.csv`, `02_sources/download_queue.csv`, `02_sources/pdf/`, and `logs/paper_discovery_log.md` after you supply search queries and Unpaywall email configuration.
+The optional paper discovery scripts are present under `scripts/paper_discovery/`. They can populate `01_literature_search/candidate_papers.csv`, `02_sources/download_queue.csv`, `02_sources/pdf/`, and `logs/paper_discovery_log.md` after you supply search queries, an OpenAlex API key, and Unpaywall email configuration.
 
 ## Prompt Quality Notes
 
@@ -675,7 +758,7 @@ One known convention remains: prompts are hard-coded to `projects/sample_project
 5. Populate `candidate_papers.csv` by manually executing searches, running the optional paper discovery pipeline, or providing sources locally.
 6. Run the Source Collection Agent.
 7. Add actual PDFs, HTML captures, or other source files.
-8. Run the Document Ingestion Agent.
+8. Run the Document Ingestion Agent prompt or manually convert local source files into `03_markdown/`.
 9. Run the Citation and Metadata Agent.
 10. Run the Evidence Extraction Agent.
 11. Run the Synthesis Matrix Agent.
