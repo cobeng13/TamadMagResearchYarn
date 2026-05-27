@@ -148,7 +148,7 @@ def test_dedupe_merges_doi_pmid_and_arxiv_duplicates():
     assert papers[2].citation_count == 2
 
 
-def test_search_all_returns_partial_results_when_provider_fails(monkeypatch):
+def test_search_all_returns_partial_results_when_provider_fails(monkeypatch, caplog):
     class GoodProvider:
         def __init__(self, config):
             pass
@@ -166,6 +166,8 @@ def test_search_all_returns_partial_results_when_provider_fails(monkeypatch):
     monkeypatch.setattr("scripts.paper_discovery.discovery.search.PROVIDER_CLASSES", {"good": GoodProvider, "bad": BadProvider})
     papers = search_all("good", providers=["good", "bad"], config={})
     assert [paper.title for paper in papers] == ["Good"]
+    assert "continuing with partial results" in caplog.text
+    assert "Traceback" not in caplog.text
 
 
 def test_env_example_contains_new_variables():
@@ -181,4 +183,3 @@ def test_env_example_contains_new_variables():
         "ENABLE_CORE",
     ]:
         assert name in text
-

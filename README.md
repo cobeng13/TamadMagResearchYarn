@@ -10,7 +10,7 @@ This repository provides a staged research writer agent system that can:
 
 - Convert rough study notes into a structured research brief, research questions, variables, inclusion criteria, search keywords, source strategy, writing scope, and downstream agent instructions.
 - Build reproducible literature search plans and ready-to-run Boolean search strings for databases and repositories.
-- Optionally run API-assisted paper discovery from local search queries using OpenAlex, Crossref, and Unpaywall.
+- Optionally run API-assisted paper discovery from local search queries using the multi-provider discovery layer.
 - Organize candidate papers, included sources, excluded sources, download queues, and source notes without fabricating source records.
 - Prepare local source folders for PDFs, HTML captures, and other source documents.
 - Convert available source documents into raw and cleaned markdown for downstream reading.
@@ -46,16 +46,37 @@ This is not a fully automated web research bot or submission system. The prompt-
 
 The repository currently has two levels of automation:
 
-- **Implemented local/API scripts**: the research brief helper creates a prompt file from study notes, and the paper discovery scripts can query scholarly APIs, normalize metadata, deduplicate/rank candidate papers, identify legal OA links, and optionally download legal OA PDFs.
+- **Implemented local/API scripts**: the research brief helper creates a prompt file from study notes, and the paper discovery scripts can query scholarly APIs, normalize metadata, deduplicate/rank candidate papers, and write canonical candidate records. Legal OA PDF download remains an explicit separate step.
 - **Prompt-guided workflow stages**: literature screening, source collection decisions, document ingestion to markdown, citation metadata extraction, evidence extraction, synthesis, drafting, and audits are currently specified by agent prompts. A user or LLM environment must run those prompts and save the requested files.
 
 In practical terms, paper finding is partly automated, but manuscript writing and document conversion are not yet fully autonomous.
+
+For a detailed implementation handoff, current gaps, and the proposed AI integration path for paper discovery, see:
+
+```text
+PROJECT_STATE.md
+```
+
+### Near-Term AI Integration Target
+
+The first AI integration should focus on the paper discovery stage, before manuscript drafting. The current deterministic tools already handle provider calls, metadata normalization, deduplication, ranking, canonical candidate rows, and explicit legal OA PDF download from prepared queues. AI should be added around those tools, not in place of them.
+
+Recommended first AI-assisted capabilities:
+
+- Generate and refine `01_literature_search/search_queries.md` from `00_brief/` files.
+- Convert broad research questions into provider-specific query variants for OpenAlex, PubMed, Semantic Scholar, CORE, Europe PMC, Crossref, arXiv, and repository searches.
+- Review normalized candidate records and assign transparent relevance labels, reasons, and screening suggestions.
+- Identify likely duplicates or metadata conflicts that deterministic rules do not catch.
+- Explain why a paper should be prioritized, excluded, or marked `To be confirmed.`
+
+AI should not invent papers, DOIs, URLs, abstracts, author names, citation counts, PDFs, or screening decisions. Any AI-written relevance decision should be stored as a suggestion until a human accepts it.
 
 ## Repository Layout
 
 ```text
 research_agent/
   README.md
+  PROJECT_STATE.md
   agents/
     research_brief_agent.py
     prompts/
@@ -86,10 +107,11 @@ research_agent/
   scripts/
     paper_discovery/
       run_discovery_pipeline.py
-      search_openalex.py
-      enrich_crossref.py
-      find_oa_pdfs.py
+      generate_search_queries.py
+      search.py
+      candidate_schema.py
       download_pdfs.py
+      legacy/
       config.example.yaml
 ```
 
@@ -304,23 +326,35 @@ Then run the document ingestion prompt or manually convert the files into the ex
 
 ## Optional API-Assisted Paper Discovery
 
-The `scripts/paper_discovery/` tools add a controlled API layer before source collection. They do not replace human screening or the local evidence workflow. They create candidate records, enrich missing metadata, find legal open-access locations, and optionally download legal OA PDFs into the normal project source folder.
+The `scripts/paper_discovery/` tools add a controlled API layer before source collection. They do not replace human screening or the local evidence workflow. The main pipeline creates canonical candidate records from the multi-provider search layer. Legal OA PDF download is intentionally separate and explicit.
 
 ### APIs Used
 
-- **OpenAlex Works API**: searches for candidate papers from queries in `01_literature_search/search_queries.md`. OpenAlex requires a free API key. Results are written to `01_literature_search/candidate_papers.csv` with `screening_status` set to `unscreened`.
-- **Crossref REST API**: enriches candidate rows by DOI or title. It fills missing DOI, title, author, year, journal/source, and URL fields where Crossref has a confident match. Public Crossref access does not require a key, but a polite email is recommended; Crossref Metadata Plus users may provide an optional API token.
-- **Unpaywall API**: checks candidate DOIs for legal open-access full text. It writes OA landing-page and PDF URLs to `02_sources/download_queue.csv`. Unpaywall requires an email parameter.
+- **OpenAlex Works API**: searches candidate papers through the provider layer. OpenAlex requires a free API key.
+- **Crossref REST API**: searches and returns bibliographic metadata. Public Crossref access does not require a key, but a polite email is recommended; Crossref Metadata Plus users may provide an optional API token.
+- **Unpaywall API**: supported by the provider layer and archived legacy queue script for legal open-access full-text locations. Unpaywall requires an email parameter.
 - **Semantic Scholar Graph API**: searches papers and returns citation/reference counts, fields of study, external IDs, and open-access PDF links when available. `SEMANTIC_SCHOLAR_API_KEY` is optional and sent as `x-api-key`.
 - **PubMed / NCBI E-utilities**: searches PubMed with ESearch and retrieves batched metadata with EFetch. `NCBI_API_KEY` is optional; `NCBI_TOOL` and `CONTACT_EMAIL` are supported.
 - **Europe PMC REST API**: searches biomedical and open-access records. No API key is required.
 - **arXiv API**: searches preprint metadata and links. No API key is required; the provider enforces a minimum 3-second request interval and does not mass-download PDFs.
 - **CORE API**: searches repository/full-text records. `CORE_API_KEY` is optional and sent when present.
-- **Direct PDF HTTP requests**: `download_pdfs.py` downloads only the `pdf_url` values already recorded in `download_queue.csv`, then saves files under `02_sources/pdf/`.
+- **Direct PDF HTTP requests**: `download_pdfs.py` downloads only explicit legal OA `pdf_url` values already recorded in `download_queue.csv`, then saves files under `02_sources/pdf/`.
 
 The API scripts use `requests`, `pandas`, `PyYAML`, `python-slugify`, and `tqdm` from `requirements.txt`. They respect a configurable request delay and write activity to `logs/paper_discovery_log.md`.
 
 ### How the Pipeline Works
+
+### Canonical Candidate Schema
+
+`candidate_papers.csv` now has one canonical schema used by the literature-search prompt, the multi-provider export path, and the recommended discovery pipeline:
+
+```csv
+candidate_id,title,authors,year,publication_date,journal_or_repository,publisher,source_type,database_or_source,source_providers,search_query,doi,pmid,pmcid,arxiv_id,semantic_scholar_id,openalex_id,core_id,url,pdf_url,is_open_access,oa_status,license,abstract,keywords,fields_of_study,publication_types,citation_count,reference_count,influential_citation_count,ranking_score,access_type,screening_status,screening_reason,human_decision,human_notes,metadata_warnings,date_added,date_updated
+```
+
+New rows default to `screening_status=unscreened`. `human_decision` and `human_notes` remain blank unless a human reviewer explicitly fills them. Discovery refreshes preserve existing human review fields.
+
+Stable `candidate_id` values are generated from DOI first, then PMID, PMCID, arXiv ID, OpenAlex ID, Semantic Scholar ID, CORE ID, and finally normalized title/year. List-like fields such as `source_providers`, `keywords`, `fields_of_study`, and `publication_types` use semicolon-separated values.
 
 1. Create or edit:
 
@@ -328,7 +362,15 @@ The API scripts use `requests`, `pandas`, `PyYAML`, `python-slugify`, and `tqdm`
 projects/sample_project/01_literature_search/search_queries.md
 ```
 
-Add one real search query per bullet or line. If this file is missing, the OpenAlex script creates a small template and stops without inventing queries.
+Add one real search query per bullet or line. If this file is missing, the main discovery pipeline creates a small template and stops without inventing queries.
+
+You can also generate a first-pass query set from the stage 00 brief files:
+
+```powershell
+python scripts\paper_discovery\generate_search_queries.py --project projects/sample_project --max-queries 24
+```
+
+This script reads `projects/sample_project/00_brief/_ai_response.md` and related brief files, then writes `01_literature_search/search_queries.md`. It does not call an AI API, search the web, create source records, or make screening decisions. By default it preserves existing queries; add `--replace` to rewrite the query file from generated queries only.
 
 2. Install dependencies:
 
@@ -361,6 +403,8 @@ user_agent: "ResearchAgent/0.1 (mailto:your_email@example.com)"
 request_delay_seconds: 1.0
 ```
 
+`scripts/paper_discovery/config.yaml` is local-only and may contain API keys. It is intentionally ignored by git. Do not commit it. `.env`, `.env.local`, `*.key`, and `*.pem` files are also ignored.
+
 You can also set secrets and contact details with environment variables:
 
 ```powershell
@@ -392,6 +436,13 @@ ENABLE_CORE=true
 
 ### Multi-Provider Search CLI
 
+There is one recommended discovery pipeline:
+
+- `run_discovery_pipeline.py` runs the newer multi-provider search layer across enabled providers and writes canonical `candidate_papers.csv` rows.
+- `python -m scripts.paper_discovery.search` runs one direct multi-provider search and can export canonical candidate rows.
+
+The old OpenAlex-first scripts are archived under `scripts/paper_discovery/legacy/` for reference. No AI API calls are included yet.
+
 Search all enabled providers:
 
 ```powershell
@@ -404,7 +455,11 @@ Search selected providers and export normalized results:
 python -m scripts.paper_discovery.search "licensure exam predictors" --providers openalex,semantic_scholar,pubmed --year-from 2020 --year-to 2026 --export projects/sample_project/01_literature_search/provider_results.csv
 ```
 
+By default, `--export` writes the canonical candidate schema. Use `--export-format provider` only when you need the older compact provider-result export.
+
 The multi-provider search layer normalizes results into one `Paper` schema, deduplicates by DOI, PMID, PMCID, arXiv ID, normalized title/year, and high-confidence fuzzy title match, then ranks candidates using query relevance, citation counts, recency, full-text availability, and a biomedical-source boost for PubMed and Europe PMC.
+
+Provider outages and timeouts are expected occasionally. If one provider fails, the run continues with partial results from the other providers and logs a concise warning.
 
 Rate-limit behavior:
 
@@ -413,25 +468,32 @@ Rate-limit behavior:
 - HTTP calls use timeouts and retry 429/5xx responses with exponential backoff.
 - Metadata links are safe to store, but PDFs should only be downloaded when license or open-access status allows it.
 
-4. Run the full discovery pipeline:
-
-```powershell
-python scripts\paper_discovery\run_discovery_pipeline.py --project projects/sample_project --max-results 50
-```
-
-To find OA records without downloading PDFs:
+4. Run the recommended multi-provider discovery pipeline:
 
 ```powershell
 python scripts\paper_discovery\run_discovery_pipeline.py --project projects/sample_project --max-results 50 --skip-download
 ```
 
+To restrict providers:
+
+```powershell
+python scripts\paper_discovery\run_discovery_pipeline.py --project projects/sample_project --providers openalex,crossref,semantic_scholar,pubmed,europe_pmc,arxiv,core --max-results 50 --skip-download
+```
+
+The main pipeline reads `search_queries.md`, searches the newer multi-provider layer, normalizes results into the canonical candidate schema, merges them into `candidate_papers.csv`, and preserves existing human review fields. It does not download PDFs automatically. The retained downloader only downloads explicit legal OA URLs from `download_queue.csv`.
+
 5. Review the generated files:
 
 ```text
 projects/sample_project/01_literature_search/candidate_papers.csv
+projects/sample_project/logs/paper_discovery_log.md
+```
+
+Optional legal OA download files, when separately prepared and explicitly downloaded:
+
+```text
 projects/sample_project/02_sources/download_queue.csv
 projects/sample_project/02_sources/pdf/
-projects/sample_project/logs/paper_discovery_log.md
 ```
 
 Candidate papers remain `unscreened` until a human reviews them. Inclusion and exclusion decisions still belong in the normal source collection files.
@@ -728,7 +790,7 @@ The sample project brief is already aligned to:
 
 Downstream literature search, source collection, ingestion, metadata, extraction, synthesis, drafting, audit, and final assembly folders may need to be created by running the matching prompt agents.
 
-The optional paper discovery scripts are present under `scripts/paper_discovery/`. They can populate `01_literature_search/candidate_papers.csv`, `02_sources/download_queue.csv`, `02_sources/pdf/`, and `logs/paper_discovery_log.md` after you supply search queries, an OpenAlex API key, and Unpaywall email configuration.
+The optional paper discovery scripts are present under `scripts/paper_discovery/`. The main pipeline can populate `01_literature_search/candidate_papers.csv` and `logs/paper_discovery_log.md` after you supply search queries and any needed provider credentials. Legal OA download remains a separate explicit step using `download_pdfs.py` and an already prepared `02_sources/download_queue.csv`.
 
 ## Prompt Quality Notes
 

@@ -5,6 +5,9 @@ import logging
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
+
+from scripts.paper_discovery.candidate_schema import CANONICAL_CANDIDATE_COLUMNS, papers_to_candidate_dataframe
 from scripts.paper_discovery.config import enabled_provider, load_config
 from scripts.paper_discovery.discovery.dedupe import dedupe_papers
 from scripts.paper_discovery.discovery.rank import rank_papers
@@ -60,12 +63,19 @@ def search_all(
             collected.extend(papers)
             LOGGER.info("Provider %s returned %s papers", normalized, len(papers))
         except Exception as exc:
-            LOGGER.exception("Provider %s failed: %s", normalized, exc)
+            LOGGER.warning("Provider %s failed; continuing with partial results: %s", normalized, exc)
+            LOGGER.debug("Provider %s failure details", normalized, exc_info=True)
     return rank_papers(dedupe_papers(collected), query)
 
 
-def export_papers_csv(papers: list[Paper], path: Path) -> None:
+def export_papers_csv(papers: list[Paper], path: Path, export_format: str = "candidate", search_query: str | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    if export_format == "candidate":
+        df = papers_to_candidate_dataframe(papers, search_query=search_query)
+        df.to_csv(path, index=False, encoding="utf-8")
+        return
+    if export_format != "provider":
+        raise ValueError(f"Unknown export format: {export_format}")
     columns = [
         "score",
         "title",
@@ -103,3 +113,10 @@ def export_papers_csv(papers: list[Paper], path: Path) -> None:
                 }
             )
 
+
+def export_candidates_csv(papers: list[Paper], path: Path, search_query: str | None = None) -> pd.DataFrame:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df = papers_to_candidate_dataframe(papers, search_query=search_query)
+    df = df[CANONICAL_CANDIDATE_COLUMNS]
+    df.to_csv(path, index=False, encoding="utf-8")
+    return df

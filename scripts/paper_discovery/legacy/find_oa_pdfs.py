@@ -129,7 +129,7 @@ def main() -> None:
                 continue
             rows.append(
                 {
-                    "paper_id": str(paper.get("paper_id", "")),
+                    "paper_id": str(paper.get("paper_id", "") or paper.get("candidate_id", "")),
                     "title": str(paper.get("title", "")),
                     "doi": doi,
                     "landing_page_url": location.get("url") or location.get("url_for_landing_page") or data.get("doi_url") or "",

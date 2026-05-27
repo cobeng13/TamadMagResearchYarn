@@ -79,7 +79,7 @@ class BaseProvider:
             last_response = response
             retry_after = response.headers.get("Retry-After")
             wait_seconds = float(retry_after) if retry_after and retry_after.isdigit() else backoff * (2**attempt)
-            self.logger.warning("Retryable response from %s: status=%s attempt=%s", url, response.status_code, attempt + 1)
+            self.logger.info("Retryable response from %s: status=%s attempt=%s", url, response.status_code, attempt + 1)
             self.sleeper(wait_seconds)
         assert last_response is not None
         last_response.raise_for_status()
@@ -107,4 +107,3 @@ def listify(value: Any) -> list[str]:
     if isinstance(value, str):
         return [clean_text(part) for part in value.replace(";", ",").split(",") if clean_text(part)]
     return [clean_text(value)] if clean_text(value) else []
-

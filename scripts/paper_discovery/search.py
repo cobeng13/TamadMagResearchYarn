@@ -16,6 +16,7 @@ def main() -> None:
     parser.add_argument("--year-from", type=int)
     parser.add_argument("--year-to", type=int)
     parser.add_argument("--export", type=Path, help="CSV export path")
+    parser.add_argument("--export-format", choices=["candidate", "provider"], default="candidate", help="CSV export schema")
     parser.add_argument("--config", type=Path, help="Path to paper discovery config.yaml")
     parser.add_argument("--log-level", default="WARNING")
     args = parser.parse_args()
@@ -25,7 +26,7 @@ def main() -> None:
     providers = [part.strip() for part in args.providers.split(",")] if args.providers else None
     papers = search_all(args.query, args.limit, args.year_from, args.year_to, providers, config)
     if args.export:
-        export_papers_csv(papers, args.export)
+        export_papers_csv(papers, args.export, export_format=args.export_format, search_query=args.query)
     for paper in papers[: args.limit]:
         identifiers = paper.doi or paper.pmid or paper.arxiv_id or paper.source_record_id
         oa = "OA" if paper.is_open_access or paper.pdf_url else "no OA"
@@ -34,4 +35,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

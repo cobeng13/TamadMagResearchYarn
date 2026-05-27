@@ -129,10 +129,11 @@ Create this CSV with only headers unless actual candidate papers are already pro
 Use these headers:
 
 ```csv
-candidate_id,title,authors,year,source_type,journal_or_repository,doi,url,database_or_source,search_query,access_status,relevance_category,screening_status,notes
+candidate_id,title,authors,year,publication_date,journal_or_repository,publisher,source_type,database_or_source,source_providers,search_query,doi,pmid,pmcid,arxiv_id,semantic_scholar_id,openalex_id,core_id,url,pdf_url,is_open_access,oa_status,license,abstract,keywords,fields_of_study,publication_types,citation_count,reference_count,influential_citation_count,ranking_score,access_type,screening_status,screening_reason,human_decision,human_notes,metadata_warnings,date_added,date_updated
 ```
 
 If actual candidate papers are already provided locally, include only records that can be verified from those local files. Do not add guessed metadata.
+Set `screening_status` to `unscreened` for new rows. Leave `human_decision` and `human_notes` blank unless a human has explicitly provided those decisions or notes.
 
 ### `search_log.md`
 Create a reusable log template with:

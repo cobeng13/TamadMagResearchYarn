@@ -2,8 +2,11 @@ __pycache__/
 *.py[cod]
 
 .env
+.env.local
 .venv/
 venv/
+*.key
+*.pem
 
 scripts/paper_discovery/config.yaml
 projects/*/logs/

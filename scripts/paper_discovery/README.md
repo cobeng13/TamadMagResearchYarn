@@ -1,6 +1,6 @@
 # Paper Discovery Scripts
 
-These scripts add an API-based discovery layer to the local Research Agent workflow. They search for candidate papers, enrich metadata, identify legal open-access locations, and optionally download legal OA PDFs into the project source folder.
+These scripts add an API-based discovery layer to the local Research Agent workflow. The main pipeline searches multiple scholarly providers, normalizes metadata, deduplicates/ranks results, and writes canonical candidate records. Legal OA PDF download is separate and explicit.
 
 ## APIs Used
 
@@ -29,7 +29,7 @@ Copy the example config:
 Copy-Item scripts\paper_discovery\config.example.yaml scripts\paper_discovery\config.yaml
 ```
 
-Edit `scripts/paper_discovery/config.yaml` and add your OpenAlex API key and email addresses:
+Edit `scripts/paper_discovery/config.yaml` and add your API keys and email addresses:
 
 ```yaml
 project_dir: projects/sample_project
@@ -47,6 +47,8 @@ core_api_key: ""
 user_agent: "ResearchAgent/0.1 (mailto:your_email@example.com)"
 request_delay_seconds: 1.0
 ```
+
+`config.yaml` is local-only and may contain API keys. It is intentionally ignored by git. Do not commit it.
 
 You can also set secrets with environment variables instead of storing them in `config.yaml`:
 
@@ -80,7 +82,21 @@ Search selected providers:
 python -m scripts.paper_discovery.search "licensure exam predictors" --providers openalex,semantic_scholar,pubmed --year-from 2020 --year-to 2026 --export projects/sample_project/01_literature_search/provider_results.csv
 ```
 
+By default, `--export` writes the canonical `candidate_papers.csv` schema. Use `--export-format provider` for the older compact provider-result export.
+
 The multi-provider layer normalizes records into a shared `Paper` model, deduplicates by DOI, PMID, PMCID, arXiv ID, normalized title/year, and high-confidence fuzzy title match, then ranks results using query relevance, citation counts, recency, full-text availability, and biomedical-source boosts.
+
+Provider outages and timeouts are handled conservatively. If one provider fails, the search continues with results from the remaining providers and logs a concise warning instead of stopping the run.
+
+## Canonical Candidate Schema
+
+The discovery foundation now uses one canonical candidate schema:
+
+```csv
+candidate_id,title,authors,year,publication_date,journal_or_repository,publisher,source_type,database_or_source,source_providers,search_query,doi,pmid,pmcid,arxiv_id,semantic_scholar_id,openalex_id,core_id,url,pdf_url,is_open_access,oa_status,license,abstract,keywords,fields_of_study,publication_types,citation_count,reference_count,influential_citation_count,ranking_score,access_type,screening_status,screening_reason,human_decision,human_notes,metadata_warnings,date_added,date_updated
+```
+
+New records are `unscreened`. Human review fields are blank by default and preserved on refresh.
 
 ## Rate Limits and Access Notes
 
@@ -92,7 +108,7 @@ The multi-provider layer normalizes records into a shared `Paper` model, dedupli
 
 ## Inputs
 
-OpenAlex search queries are read from:
+Search queries are read from:
 
 ```text
 projects/sample_project/01_literature_search/search_queries.md
@@ -100,31 +116,43 @@ projects/sample_project/01_literature_search/search_queries.md
 
 If this file is missing, the scripts create a small template and stop without inventing queries.
 
+To generate a first-pass query file from stage 00 brief outputs:
+
+```powershell
+python scripts\paper_discovery\generate_search_queries.py --project projects/sample_project --max-queries 24
+```
+
+The query generator reads `00_brief/_ai_response.md` and related brief files. It is deterministic local code: it does not call an AI API, search the web, create source records, or make screening decisions. Existing queries are preserved unless `--replace` is supplied.
+
 ## Run the Pipeline
 
 From the repository root:
 
 ```powershell
-python scripts\paper_discovery\run_discovery_pipeline.py --project projects/sample_project --max-results 50
-```
-
-To identify OA records without downloading PDFs:
-
-```powershell
 python scripts\paper_discovery\run_discovery_pipeline.py --project projects/sample_project --max-results 50 --skip-download
 ```
 
-To re-download existing PDFs:
+The main pipeline uses the newer multi-provider layer and writes canonical candidate rows. It does not download PDFs automatically.
+
+To restrict providers:
 
 ```powershell
-python scripts\paper_discovery\run_discovery_pipeline.py --project projects/sample_project --force
+python scripts\paper_discovery\run_discovery_pipeline.py --project projects/sample_project --providers openalex,crossref,semantic_scholar,pubmed,europe_pmc,arxiv,core --max-results 50 --skip-download
+```
+
+The older OpenAlex-first scripts are archived in `scripts/paper_discovery/legacy/` for reference only.
+
+To download existing legal OA PDF URLs from `download_queue.csv`, run the downloader explicitly:
+
+```powershell
+python scripts\paper_discovery\download_pdfs.py --project projects/sample_project
 ```
 
 ## Outputs
 
 - Candidate papers: `projects/sample_project/01_literature_search/candidate_papers.csv`
-- OA download queue: `projects/sample_project/02_sources/download_queue.csv`
-- Downloaded PDFs: `projects/sample_project/02_sources/pdf/`
+- OA download queue, when separately prepared: `projects/sample_project/02_sources/download_queue.csv`
+- Downloaded PDFs, when explicitly downloaded: `projects/sample_project/02_sources/pdf/`
 - Log file: `projects/sample_project/logs/paper_discovery_log.md`
 
 Candidate results still require human screening. The scripts mark discovered candidates as `unscreened`; inclusion and exclusion decisions should be made manually in the project CSV files.
