@@ -108,6 +108,7 @@ research_agent/
     paper_discovery/
       run_discovery_pipeline.py
       generate_search_queries.py
+      ai_screen_candidates.py
       search.py
       candidate_schema.py
       download_pdfs.py
@@ -497,6 +498,73 @@ projects/sample_project/02_sources/pdf/
 ```
 
 Candidate papers remain `unscreened` until a human reviews them. Inclusion and exclusion decisions still belong in the normal source collection files.
+
+### AI-Assisted Candidate Screening
+
+After `candidate_papers.csv` exists, you can ask OpenAI to add AI screening suggestions. This is optional and does not make final human decisions.
+
+The script reads:
+
+```text
+projects/sample_project/00_brief/research_brief.md
+projects/sample_project/01_literature_search/candidate_papers.csv
+```
+
+It writes AI-only columns back to `candidate_papers.csv`:
+
+```text
+ai_relevance_label
+ai_confidence
+ai_reason
+ai_suggested_action
+ai_key_terms
+ai_metadata_warnings
+ai_screened_at
+ai_model
+```
+
+It does not overwrite `screening_status`, `screening_reason`, `human_decision`, or `human_notes`.
+
+API key setup:
+
+```powershell
+$env:OPENAI_API_KEY="your_api_key_here"
+```
+
+Or place it in a local `.env` file, which is ignored by git:
+
+```text
+OPENAI_API_KEY=your_api_key_here
+AI_SCREENING_MODEL=gpt-5-nano
+```
+
+Default model:
+
+```text
+gpt-5-nano
+```
+
+This is the default because OpenAI describes GPT-5 nano as its fastest, cheapest GPT-5 model and suitable for classification tasks. Use `--model gpt-5-mini` if you want a stronger but more expensive reviewer for borderline records.
+
+Dry run:
+
+```powershell
+python scripts\paper_discovery\ai_screen_candidates.py --project projects/sample_project --limit 50 --dry-run
+```
+
+Screen a small first batch:
+
+```powershell
+python scripts\paper_discovery\ai_screen_candidates.py --project projects/sample_project --limit 50 --batch-size 10
+```
+
+Screen remaining unscreened-by-AI rows:
+
+```powershell
+python scripts\paper_discovery\ai_screen_candidates.py --project projects/sample_project --batch-size 20
+```
+
+The script creates a timestamped backup of `candidate_papers.csv` before writing unless `--no-backup` is supplied.
 
 ### 5. Add Statistical Results Locally
 

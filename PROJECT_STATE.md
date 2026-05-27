@@ -87,6 +87,14 @@ python scripts\paper_discovery\generate_search_queries.py --project projects/sam
 
 This helper reads `00_brief/_ai_response.md`, `research_brief.md`, `research_questions.md`, `search_keywords.md`, and `source_strategy.md`. It is deterministic local code and does not call an AI API.
 
+Candidate screening suggestions can be generated with:
+
+```powershell
+python scripts\paper_discovery\ai_screen_candidates.py --project projects/sample_project --limit 50 --batch-size 10
+```
+
+This is the first OpenAI-backed step. It reads `00_brief/research_brief.md` and `01_literature_search/candidate_papers.csv`, then writes AI-only suggestion columns. It must not overwrite `screening_status`, `human_decision`, or `human_notes`.
+
 #### Multi-Provider Search Layer
 
 Entry point:
@@ -272,17 +280,17 @@ The tests do not currently cover:
 - Archived legacy script behavior.
 - Unpaywall queue generation from live records.
 - PDF download behavior.
-- AI-assisted query generation or screening.
+- Live OpenAI API screening calls.
 - Prompt file output validation.
 
 ## Known Gaps
 
-Key gaps before AI integration:
+Current AI/API gaps:
 
-- No OpenAI or ChatGPT API client exists.
-- No structured LLM call wrapper exists.
+- `ai_screen_candidates.py` calls the OpenAI Responses API for candidate screening suggestions only.
+- No general-purpose structured LLM client exists yet.
 - No persistent AI run log exists.
-- No JSON schema or Pydantic model exists for AI outputs.
+- The screening script uses a JSON schema request, but no shared Pydantic model exists for AI outputs.
 - No automatic parsing of `_ai_response.md` into stage 00 files.
 - Prompt stages are hard-coded to `projects/sample_project/`.
 - Legacy OpenAlex-first scripts are archived for reference and should not be used as the main workflow.
@@ -290,7 +298,7 @@ Key gaps before AI integration:
 - No automated evidence extraction from PDFs or markdown is implemented.
 - No human review workflow is encoded for accepting or rejecting AI screening suggestions.
 - No caching layer exists for provider responses or LLM responses.
-- No cost, token, retry, or model configuration exists for AI calls.
+- Cost/token reporting and batch resume ergonomics are still minimal.
 
 ## Recommended First AI Integration
 
@@ -312,6 +320,8 @@ Add AI assistance for:
 3. Candidate relevance review from normalized metadata.
 4. Screening suggestions with explicit reasons.
 5. Metadata conflict notes where provider records disagree.
+
+Current implementation status: candidate relevance review and screening suggestions are implemented as `scripts/paper_discovery/ai_screen_candidates.py`. Query generation is still deterministic local code, not an AI API call.
 
 Do not initially add:
 
@@ -376,14 +386,14 @@ scripts/
     ai_screen_candidates.py
 ```
 
-Suggested responsibilities:
+Suggested responsibilities for a future shared AI layer:
 
 - `client.py`: wraps the selected LLM provider, environment variables, retries, and JSON response validation.
 - `schemas.py`: contains typed output schemas for query plans and screening suggestions.
 - `prompts.py`: stores prompt templates as versioned strings or loads markdown templates.
 - `logging.py`: writes model, prompt version, input file hashes, output file paths, and errors.
 - `ai_query_generation.py`: reads `00_brief/`, writes query plan and query variants.
-- `ai_screen_candidates.py`: reads canonical candidate CSV, writes AI suggestions only.
+- `ai_screen_candidates.py`: already reads canonical candidate CSV and writes AI suggestions only; it can later be refactored to use a shared client.
 
 ### Suggested Environment Variables
 
@@ -397,7 +407,13 @@ AI_MAX_CANDIDATES_PER_BATCH=
 AI_DRY_RUN=true
 ```
 
-Use official provider documentation when implementing the actual client because model names and API options change over time.
+Current screening default:
+
+```text
+AI_SCREENING_MODEL=gpt-5-nano
+```
+
+The API key belongs in the shell environment or a local ignored `.env` file. Do not commit real API keys.
 
 ## Recommended Technical Sequence
 

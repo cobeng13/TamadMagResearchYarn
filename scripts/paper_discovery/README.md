@@ -156,3 +156,28 @@ python scripts\paper_discovery\download_pdfs.py --project projects/sample_projec
 - Log file: `projects/sample_project/logs/paper_discovery_log.md`
 
 Candidate results still require human screening. The scripts mark discovered candidates as `unscreened`; inclusion and exclusion decisions should be made manually in the project CSV files.
+
+## AI Screening Suggestions
+
+Use OpenAI only after `candidate_papers.csv` exists:
+
+```powershell
+python scripts\paper_discovery\ai_screen_candidates.py --project projects/sample_project --limit 50 --batch-size 10
+```
+
+The script reads `00_brief/research_brief.md` and candidate metadata, then adds AI-only suggestion columns to `candidate_papers.csv`. It does not overwrite human review fields or final screening decisions.
+
+Set the API key in the shell:
+
+```powershell
+$env:OPENAI_API_KEY="your_api_key_here"
+```
+
+Or in a local ignored `.env` file:
+
+```text
+OPENAI_API_KEY=your_api_key_here
+AI_SCREENING_MODEL=gpt-5-nano
+```
+
+Default model is `gpt-5-nano`, which is appropriate for inexpensive classification-style screening. Use `--model gpt-5-mini` for a stronger reviewer.
