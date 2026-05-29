@@ -1,62 +1,27 @@
 from __future__ import annotations
 
 import argparse
-import json
-import os
 import re
 import sys
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-import requests
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from scripts.paper_discovery.ai_screen_candidates import extract_output_text, get_api_key
+from scripts.ai.client import AIClient, get_env_model
+from scripts.ai.logging import write_ai_run_log
+from scripts.ai.prompts import build_evidence_extraction_prompt
+from scripts.ai.schemas import EVIDENCE_COLUMNS, SUMMARY_SECTIONS, evidence_extraction_schema
+from scripts.paper_discovery.ai_screen_candidates import get_api_key
 
 
 DEFAULT_PROJECT = Path("projects/sample_project")
 DEFAULT_MODEL = "gpt-5-mini"
-OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 TO_CONFIRM = "To be confirmed."
-
-EVIDENCE_COLUMNS = [
-    "paper_id",
-    "citation_key",
-    "theme",
-    "study_design",
-    "population",
-    "variables",
-    "key_finding",
-    "relevance_to_current_study",
-    "source_location",
-    "confidence_rating",
-    "notes",
-]
-
-SUMMARY_SECTIONS = [
-    "paper_id",
-    "full_citation",
-    "research_purpose",
-    "study_design",
-    "population_sample",
-    "setting_context",
-    "variables",
-    "instruments_measures",
-    "statistical_methods",
-    "key_findings",
-    "limitations",
-    "relevance_to_current_study",
-    "useful_concepts_for_introduction",
-    "useful_concepts_for_rrl",
-    "useful_concepts_for_discussion",
-    "exact_source_location_if_available",
-    "confidence_rating",
-]
 
 
 def repo_root() -> Path:
@@ -167,70 +132,17 @@ def paper_payload(row_index: int, row: pd.Series, markdown: str) -> dict[str, An
 
 
 def evidence_schema() -> dict[str, Any]:
-    summary_properties = {section: {"type": "string"} for section in SUMMARY_SECTIONS}
-    evidence_properties = {column: {"type": "string"} for column in EVIDENCE_COLUMNS}
-    return {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "row_index": {"type": "integer"},
-            "paper_id": {"type": "string"},
-            "citation_key": {"type": "string"},
-            "summary": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": summary_properties,
-                "required": SUMMARY_SECTIONS,
-            },
-            "evidence_rows": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": evidence_properties,
-                    "required": EVIDENCE_COLUMNS,
-                },
-            },
-            "extraction_issues": {"type": "array", "items": {"type": "string"}},
-        },
-        "required": ["row_index", "paper_id", "citation_key", "summary", "evidence_rows", "extraction_issues"],
-    }
+    return evidence_extraction_schema()
 
 
 def build_request_payload(model: str, research_context: str, paper: dict[str, Any]) -> dict[str, Any]:
-    instructions = (
-        "You are the Evidence Extraction Agent for a conservative local academic research workflow. "
-        "Use only the supplied research context, metadata, and cleaned markdown. Do not use web knowledge. "
-        "Extract structured evidence for later synthesis; do not write manuscript prose. "
-        "Do not invent study details, sample sizes, instruments, statistics, findings, limitations, citations, DOIs, or source locations. "
-        f"When a detail cannot be verified, write '{TO_CONFIRM}'. "
-        "Separate actual source findings from relevance to the current study. "
-        "For Radiologic Technology board exam prediction work, prioritize academic performance, pre-board/mock board, clinical/internship performance, licensure outcomes, regression/classification, and predictive modeling evidence. "
-        "Use allied health evidence only as supporting context. Source locations should cite page markers, headings, table names, or To be confirmed."
+    return AIClient(api_key="payload-build-only", default_model=model).build_payload(
+        model=model,
+        instructions=build_evidence_extraction_prompt(TO_CONFIRM),
+        input_data={"research_context": research_context, "paper": paper},
+        schema=evidence_schema(),
+        schema_name="paper_evidence_extraction",
     )
-    return {
-        "model": model,
-        "instructions": instructions,
-        "input": [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": json.dumps({"research_context": research_context, "paper": paper}, ensure_ascii=False),
-                    }
-                ],
-            }
-        ],
-        "text": {
-            "format": {
-                "type": "json_schema",
-                "name": "paper_evidence_extraction",
-                "schema": evidence_schema(),
-                "strict": True,
-            }
-        },
-    }
 
 
 def call_openai_evidence_extraction(
@@ -241,23 +153,17 @@ def call_openai_evidence_extraction(
     timeout: int = 180,
     retries: int = 2,
 ) -> dict[str, Any]:
-    payload = build_request_payload(model, research_context, paper)
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    last_error: Exception | None = None
-    for attempt in range(retries + 1):
-        try:
-            response = requests.post(OPENAI_RESPONSES_URL, headers=headers, json=payload, timeout=timeout)
-            if response.status_code in {429, 500, 502, 503, 504} and attempt < retries:
-                time.sleep(2**attempt)
-                continue
-            response.raise_for_status()
-            return dict(json.loads(extract_output_text(response.json())))
-        except Exception as exc:
-            last_error = exc
-            if attempt < retries:
-                time.sleep(2**attempt)
-                continue
-    raise RuntimeError(f"OpenAI evidence extraction failed: {last_error}")
+    try:
+        return AIClient(api_key=api_key, default_model=model).responses_json(
+            instructions=build_evidence_extraction_prompt(TO_CONFIRM),
+            input_data={"research_context": research_context, "paper": paper},
+            schema=evidence_schema(),
+            schema_name="paper_evidence_extraction",
+            timeout=timeout,
+            retries=retries,
+        )
+    except Exception as exc:
+        raise RuntimeError(f"OpenAI evidence extraction failed: {exc}") from exc
 
 
 def summary_filename(result: dict[str, Any]) -> str:
@@ -328,11 +234,10 @@ def write_outputs(project_dir: Path, results: list[dict[str, Any]], skipped: lis
 
 
 def write_log(path: Path, results: list[dict[str, Any]], skipped: list[str], model: str, metadata_source: Path) -> None:
-    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     lines = [
         "# Evidence Extraction Log",
         "",
-        f"Timestamp: {stamp}",
+        f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         f"Model: {model}",
         f"Metadata source: {metadata_source}",
         f"Papers processed: {len(results)}",
@@ -349,6 +254,15 @@ def write_log(path: Path, results: list[dict[str, Any]], skipped: list[str], mod
         issues = [safe_text(issue) for issue in result.get("extraction_issues", []) if safe_text(issue)]
         lines.append(f"- `{paper_id}`: {'; '.join(issues) if issues else 'No extraction issues reported.'}")
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    write_ai_run_log(
+        path.with_name("ai_run_log.md"),
+        task_name="evidence_extraction",
+        model=model,
+        input_paths=[metadata_source],
+        output_paths=[path.parent / "evidence_table.csv", path.parent / "paper_summaries"],
+        counts={"attempted": len(results), "succeeded": len(results), "failed": len(skipped), "skipped": len(skipped)},
+        prompt_version="evidence_extraction_v1",
+    )
 
 
 def run_evidence_extraction(
@@ -393,7 +307,7 @@ def run_evidence_extraction(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Use OpenAI to extract structured evidence from cleaned markdown papers.")
     parser.add_argument("--project", default=str(DEFAULT_PROJECT), help="Project directory")
-    parser.add_argument("--model", default=os.getenv("AI_EVIDENCE_MODEL", DEFAULT_MODEL), help="OpenAI model for evidence extraction")
+    parser.add_argument("--model", default=get_env_model("AI_EVIDENCE_MODEL", DEFAULT_MODEL), help="OpenAI model for evidence extraction")
     parser.add_argument("--limit", type=int, help="Maximum papers to process")
     parser.add_argument("--offset", type=int, default=0, help="Start at this metadata row offset")
     parser.add_argument("--max-md-chars", type=int, default=90000, help="Maximum markdown characters sent per paper")

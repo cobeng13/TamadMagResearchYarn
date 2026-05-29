@@ -35,7 +35,7 @@ This is not a fully automated web research bot or submission system. The prompt-
 - It does not automatically search the web unless a user explicitly asks an agent to browse in the current task or runs the paper discovery scripts.
 - It does not download papers by default. The optional downloader only downloads legal open-access PDF URLs found through Unpaywall.
 - It does not bypass publisher access controls, use Sci-Hub, or fetch illegal copies.
-- It does not call OpenAI by default. The prompt agents generate or define prompts, but a user still runs most prompts in an LLM environment and saves the resulting files. Optional explicit scripts can call OpenAI for candidate screening and citation metadata checking.
+- It does not call OpenAI by default. The prompt agents generate or define prompts, but a user still runs most prompts in an LLM environment and saves the resulting files. Optional explicit scripts can call OpenAI for query generation, candidate screening, citation metadata checking, evidence extraction, synthesis, and gap analysis.
 - It includes a basic local PDF-to-markdown converter for text-bearing PDFs, but scanned/image-only files and complex tables may still need manual review or OCR.
 - It does not invent missing source metadata, citations, DOIs, URLs, statistics, sample sizes, p-values, coefficients, or conclusions.
 - It does not run statistical analysis unless explicitly extended or instructed to do so.
@@ -46,30 +46,35 @@ This is not a fully automated web research bot or submission system. The prompt-
 
 The repository currently has two levels of automation:
 
-- **Implemented local/API scripts**: the research brief helper creates a prompt file from study notes; paper discovery scripts can query scholarly APIs, normalize metadata, deduplicate/rank candidate papers, and write canonical candidate records; legal OA PDF queueing/downloading remains explicit; text-bearing PDFs can be converted to raw and cleaned markdown; deterministic citation metadata can be AI-checked against local markdown; cleaned markdown can be used for AI evidence extraction.
-- **Prompt-guided workflow stages**: literature screening, source collection decisions, citation metadata extraction, evidence extraction, synthesis, drafting, and audits are currently specified by agent prompts. A user or LLM environment must run those prompts and save the requested files.
+- **Implemented local/API scripts**: the research brief helper creates a prompt file from study notes; paper discovery scripts can query scholarly APIs, normalize metadata, deduplicate/rank candidate papers, and write canonical candidate records; AI-assisted query generation and candidate screening are available; legal OA PDF queueing/downloading remains explicit; text-bearing PDFs can be converted to raw and cleaned markdown; deterministic citation metadata can be AI-checked against local markdown; cleaned markdown can be used for AI evidence extraction; Stage 05 evidence can be organized into Stage 06 synthesis artifacts; Stage 06 synthesis can be turned into Stage 07 gap-analysis artifacts.
+- **Prompt-guided workflow stages**: source collection decisions, manual cleanup, drafting, outline creation, and audits are still specified by agent prompts. A user or LLM environment must run those prompts and save the requested files.
 
-In practical terms, paper finding and basic PDF text extraction are partly automated, but manuscript writing and evidence interpretation are not autonomous.
+In practical terms, discovery, ingestion, metadata checking, evidence extraction, synthesis, and gap analysis now have bounded script support. Manuscript writing, statistical interpretation, outline creation, and final review are not autonomous.
 
-For a detailed implementation handoff, current gaps, and the proposed AI integration path for paper discovery, see:
+### Shared AI Integration Layer
+
+Optional OpenAI-backed scripts use `scripts/ai/` for the Responses API client, structured-output schemas, prompt builders, and concise run logs. This shared layer is used by AI query generation, candidate screening, citation metadata checking, evidence extraction, synthesis, and gap analysis.
+
+The boundary remains conservative: deterministic scripts still own provider search, metadata normalization, deduplication, legal OA queueing/downloading, and local file creation. AI is bounded to suggestions, metadata checking against supplied markdown, structured evidence extraction from local files, structured synthesis from Stage 05 evidence, and structured research-positioning notes from Stage 06 synthesis. Human review fields remain separate from AI suggestion fields.
+
+For a detailed implementation handoff, current gaps, and the implemented AI integration path, see:
 
 ```text
 PROJECT_STATE.md
 ```
 
-### Near-Term AI Integration Target
+### Current AI-Assisted Workflow
 
-The first AI integration should focus on the paper discovery stage, before manuscript drafting. The current deterministic tools already handle provider calls, metadata normalization, deduplication, ranking, canonical candidate rows, and explicit legal OA PDF download from prepared queues. AI should be added around those tools, not in place of them.
+The implemented AI layer is designed around intermediate artifacts, not autonomous manuscript writing. It can:
 
-Recommended first AI-assisted capabilities:
+- Generate a query plan and provider-specific search variants from `00_brief/` files.
+- Add AI-only candidate screening labels, reasons, confidence values, and suggested actions to canonical candidate records.
+- Check deterministic citation metadata against supplied local markdown.
+- Extract structured paper evidence from local cleaned markdown and verified metadata.
+- Build Stage 06 synthesis artifacts from Stage 05 evidence rows and paper summaries.
+- Build Stage 07 gap-analysis artifacts from Stage 06 synthesis outputs.
 
-- Generate and refine `01_literature_search/search_queries.md` from `00_brief/` files.
-- Convert broad research questions into provider-specific query variants for OpenAlex, PubMed, Semantic Scholar, CORE, Europe PMC, Crossref, arXiv, and repository searches.
-- Review normalized candidate records and assign transparent relevance labels, reasons, and screening suggestions.
-- Identify likely duplicates or metadata conflicts that deterministic rules do not catch.
-- Explain why a paper should be prioritized, excluded, or marked `To be confirmed.`
-
-AI should not invent papers, DOIs, URLs, abstracts, author names, citation counts, PDFs, or screening decisions. Any AI-written relevance decision should be stored as a suggestion until a human accepts it.
+AI must not invent papers, DOIs, URLs, abstracts, author names, citation counts, PDFs, source text, findings, gap claims, or screening decisions. Any AI-written relevance decision remains a suggestion until a human accepts it, and synthesis/gap-analysis outputs remain intermediate evidence organization and research positioning rather than manuscript prose.
 
 ## Repository Layout
 
@@ -105,9 +110,15 @@ research_agent/
       input/
       00_brief/
   scripts/
+    ai/
+      client.py
+      schemas.py
+      prompts.py
+      logging.py
     paper_discovery/
       run_discovery_pipeline.py
       generate_search_queries.py
+      ai_query_generation.py
       ai_screen_candidates.py
       search.py
       candidate_schema.py
@@ -115,6 +126,10 @@ research_agent/
       download_pdfs.py
       legacy/
       config.example.yaml
+    synthesis/
+      ai_build_synthesis.py
+    gap_analysis/
+      ai_gap_analysis.py
 ```
 
 ## Core Workflow
@@ -348,7 +363,7 @@ The `scripts/paper_discovery/` tools add a controlled API layer before source co
 - **CORE API**: searches repository/full-text records. `CORE_API_KEY` is optional and sent when present.
 - **Direct PDF HTTP requests**: `download_pdfs.py` downloads only explicit legal OA `pdf_url` values already recorded in `download_queue.csv`, then saves files under `02_sources/pdf/`.
 
-The API scripts use `requests`, `pandas`, `PyYAML`, `python-slugify`, and `tqdm` from `requirements.txt`. Discovery writes activity to `logs/paper_discovery_log.md`; queue building and PDF downloading write separate logs under `projects/sample_project/logs/`.
+The API and ingestion scripts use `requests`, `pandas`, `PyYAML`, `python-slugify`, `tqdm`, and `pypdf` from `requirements.txt`. Discovery writes activity to `logs/paper_discovery_log.md`; queue building and PDF downloading write separate logs under `projects/sample_project/logs/`.
 
 ### How the Pipeline Works
 
@@ -379,6 +394,16 @@ python scripts\paper_discovery\generate_search_queries.py --project projects/sam
 ```
 
 This script reads `projects/sample_project/00_brief/_ai_response.md` and related brief files, then writes `01_literature_search/search_queries.md`. It does not call an AI API, search the web, create source records, or make screening decisions. By default it preserves existing queries; add `--replace` to rewrite the query file from generated queries only.
+
+AI-assisted query planning is also available:
+
+```powershell
+python -m scripts.paper_discovery.ai_query_generation --project projects/sample_project --limit 40 --dry-run
+python -m scripts.paper_discovery.ai_query_generation --project projects/sample_project --limit 40
+python -m scripts.paper_discovery.ai_query_generation --project projects/sample_project --limit 40 --apply
+```
+
+This reads Stage 00 brief files and writes `01_literature_search/ai_query_plan.md`, `01_literature_search/ai_query_variants.csv`, `01_literature_search/search_queries_ai.md`, and `logs/ai_query_generation_log.md`. It does not search providers, create candidate paper records, or make screening decisions. Use `--apply` to append reviewed general query suggestions into `search_queries.md`, then run `run_discovery_pipeline.py`.
 
 2. Install dependencies:
 
@@ -543,6 +568,10 @@ Or place it in a local `.env` file, which is ignored by git:
 ```text
 OPENAI_API_KEY=your_api_key_here
 AI_SCREENING_MODEL=gpt-5-nano
+AI_METADATA_MODEL=gpt-5-nano
+AI_EVIDENCE_MODEL=gpt-5-mini
+AI_SYNTHESIS_MODEL=gpt-5-mini
+AI_DISCOVERY_MODEL=gpt-5-mini
 ```
 
 Default model:
@@ -769,7 +798,14 @@ This requires `OPENAI_API_KEY`. The default model is `AI_EVIDENCE_MODEL=gpt-5-mi
 
 ### Synthesis Matrix Agent
 
-Groups extracted evidence by theme.
+A bounded OpenAI-backed Stage 06 script can organize already-extracted Stage 05 evidence into structured synthesis artifacts:
+
+```powershell
+python -m scripts.synthesis.ai_build_synthesis --project projects/sample_project --dry-run
+python -m scripts.synthesis.ai_build_synthesis --project projects/sample_project --overwrite
+```
+
+It reads `05_evidence_extraction/evidence_table.csv` and available files under `05_evidence_extraction/paper_summaries/`, plus brief and metadata context when present. It writes:
 
 Outputs:
 
@@ -778,17 +814,29 @@ Outputs:
 - `literature_map.md`
 - `synthesis_notes.md`
 
-It separates direct evidence, indirect support, mixed findings, contradictions, methodological patterns, contextual gaps, and likely uses for Introduction, RRL, Methods, and Discussion.
+It separates direct evidence, indirect support, mixed findings, contradictions, methodological patterns, contextual gaps, and likely uses for Introduction, RRL, Methods, and Discussion. It does not reread raw PDFs by default and does not write the RRL or manuscript directly.
+
+This requires `OPENAI_API_KEY` unless `--dry-run` is used. The default model is `AI_SYNTHESIS_MODEL=gpt-5-mini`. The implementation validates returned citation keys and paper IDs against the supplied Stage 05/metadata inputs, coerces unsupported classifications to `to_be_confirmed`, writes blocked notes if Stage 05 evidence is missing, and refuses to overwrite existing Stage 06 outputs unless `--overwrite` is supplied.
 
 ### Gap Analysis Agent
 
-Turns synthesis into research positioning.
+A bounded OpenAI-backed Stage 07 script can turn reviewed Stage 06 synthesis outputs into structured research-positioning artifacts:
+
+```powershell
+python -m scripts.gap_analysis.ai_gap_analysis --project projects/sample_project --dry-run
+python -m scripts.gap_analysis.ai_gap_analysis --project projects/sample_project --overwrite
+```
+
+It reads `06_synthesis/synthesis_matrix.csv`, `theme_matrix.md`, `literature_map.md`, and `synthesis_notes.md`, plus Stage 00 brief context and available evidence/metadata context. It writes:
 
 Outputs:
 
 - `research_gap_analysis.md`
 - `study_contribution.md`
 - `problem_statement_refined.md`
+- `gap_matrix.csv`
+
+This stage prepares safe research positioning for outline and writing stages. It does not draft the Introduction, Review of Related Literature, Discussion, or full manuscript. Gap claims must trace to the supplied Stage 06 synthesis or be marked `To be confirmed.`, and the script refuses to overwrite existing Stage 07 outputs unless `--overwrite` is supplied.
 
 This stage clarifies what is known, what remains unknown, population or context gaps, methodological gaps, local or Philippine gaps, and variable or measurement gaps.
 
@@ -935,10 +983,10 @@ The sample project currently contains:
 - generated brief files in `00_brief/`
 - `_prompt_for_ai.md` and `_ai_response.md` artifacts from the initial research brief run
 
-The sample project brief is already aligned to:
+The sample project brief is already aligned to the current predictive-validation positioning:
 
 - academic performance;
-- professional course grades;
+- professional course grades and course-cluster grades;
 - internship or clinical performance;
 - pre-board examination results;
 - terminal competency or comprehensive examination results, if available;
@@ -946,9 +994,17 @@ The sample project brief is already aligned to:
 - pass/fail licensure outcome;
 - subject-area licensure performance, if available.
 
-Downstream literature search, source collection, ingestion, metadata, extraction, synthesis, drafting, audit, and final assembly folders may need to be created by running the matching prompt agents.
+The sample project has also been manually reviewed after local PDF/markdown placement to repair citation-key propagation. Stable local paper IDs were assigned for no-DOI local sources, exact synthesis citation keys were restored where DOI paper IDs were already present, stale local path prefixes were corrected, and affected Stage 05 summary filenames were renamed away from `to-be-confirmed_*`. The repair log is:
 
-The optional paper discovery scripts are present under `scripts/paper_discovery/`. The main pipeline can populate `01_literature_search/candidate_papers.csv` and `logs/paper_discovery_log.md` after you supply search queries and any needed provider credentials. Legal OA download remains a separate explicit step using `build_download_queue_from_ai.py` and `download_pdfs.py`.
+```text
+projects/sample_project/logs/citation_key_repair_log.md
+```
+
+The latest manual consistency check found no exact `To be confirmed.` values in `paper_id`, `citation_key`, or `supporting_synthesis_source` fields across metadata, evidence, synthesis, and gap-matrix CSVs.
+
+Downstream literature search, source collection, drafting, audit, and final assembly folders may need to be created by running the matching prompt agents. Ingestion, metadata extraction/checking, evidence extraction, synthesis, and gap analysis also have local scripts and can be run before returning to the prompt-guided stages.
+
+The optional paper discovery scripts are present under `scripts/paper_discovery/`. The main pipeline can populate `01_literature_search/candidate_papers.csv` and `logs/paper_discovery_log.md` after you supply search queries and any needed provider credentials. AI-assisted query generation, candidate screening, metadata checking, evidence extraction, synthesis, and gap analysis are implemented as bounded explicit scripts. Legal OA download remains a separate explicit step using `build_download_queue_from_ai.py` and `download_pdfs.py`.
 
 ## Prompt Quality Notes
 
@@ -980,9 +1036,9 @@ One known convention remains: prompts are hard-coded to `projects/sample_project
 7. Add actual PDFs, HTML captures, or other source files.
 8. Run `python -m scripts.document_ingestion.pdf_to_markdown --project projects/sample_project`, then use the Document Ingestion Agent prompt only for manual cleanup or difficult files.
 9. Run `python -m scripts.citation_metadata.extract_metadata --project projects/sample_project --overwrite`, then use the Citation and Metadata Agent prompt for manual verification or cleanup.
-10. Run the Evidence Extraction Agent.
-11. Run the Synthesis Matrix Agent.
-12. Run the Gap Analysis Agent.
+10. Run `python -m scripts.evidence_extraction.ai_extract_evidence --project projects/sample_project --limit 19 --overwrite`, then review the Stage 05 outputs or use the Evidence Extraction Agent prompt for manual extraction/cleanup.
+11. Run `python -m scripts.synthesis.ai_build_synthesis --project projects/sample_project --overwrite`, then review the Stage 06 outputs or use the Synthesis Matrix Agent prompt for manual cleanup.
+12. Run `python -m scripts.gap_analysis.ai_gap_analysis --project projects/sample_project --overwrite`, then review Stage 07 research positioning outputs or use the Gap Analysis Agent prompt for manual cleanup.
 13. Run the Outline Agent.
 14. Draft or supply `09_drafts/methodology/methodology_draft.md` if a Methodology section is needed.
 15. Run the Introduction and RRL Writer Agent.
@@ -1019,5 +1075,8 @@ with `projects/sample_project/` as the default example.
 - CSV files should quote fields containing commas, quotation marks, or line breaks, and escape internal quotation marks by doubling them.
 - Draft citations use `[@CitationKey]` markers until final formatting.
 - References under `## Metadata To Confirm` in `references_apa7.md` should not be included as final-ready manuscript references.
+- Manually added PDFs may produce provisional local IDs when no DOI is available. Keep those IDs stable across `04_metadata/`, `05_evidence_extraction/`, `06_synthesis/`, and `07_gap_analysis/` instead of leaving `paper_id` as `To be confirmed.`.
+- If local source folders move, verify `local_source_file` and `local_markdown_file` paths in metadata tables before rerunning AI extraction or synthesis.
+- Manual downstream repairs should leave a log under `projects/<project>/logs/` and backups beside edited files, as in `.citation_repair.bak` and `.path_repair.bak`.
 - If an agent runs before prerequisites exist, it should create templates or blocked-status notes instead of fabricating content.
 - Final assembly is provisional unless citation audit, claim audit, and style review are complete and do not identify unresolved major blockers.

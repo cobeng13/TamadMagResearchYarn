@@ -1,17 +1,13 @@
 from __future__ import annotations
 
 import argparse
-import json
-import os
 import sys
-import time
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-import requests
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -25,12 +21,15 @@ from scripts.citation_metadata.extract_metadata import (
     in_text_citation,
     make_key,
 )
-from scripts.paper_discovery.ai_screen_candidates import extract_output_text, get_api_key
+from scripts.ai.client import AIClient, get_env_model
+from scripts.ai.logging import write_ai_run_log
+from scripts.ai.prompts import build_metadata_check_prompt
+from scripts.ai.schemas import metadata_check_schema
+from scripts.paper_discovery.ai_screen_candidates import get_api_key
 
 
 DEFAULT_PROJECT = Path("projects/sample_project")
 DEFAULT_MODEL = "gpt-5-nano"
-OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 
 REVIEW_COLUMNS = [
     "paper_id",
@@ -120,72 +119,17 @@ def metadata_payload(row_index: int, row: pd.Series, markdown: str) -> dict[str,
 
 
 def checked_schema() -> dict[str, Any]:
-    field_properties = {column: {"type": "string"} for column in METADATA_COLUMNS if column != "citation_key"}
-    field_properties["row_index"] = {"type": "integer"}
-    field_properties["citation_key"] = {"type": "string"}
-    return {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "records": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        **field_properties,
-                        "ai_metadata_status": {"type": "string", "enum": ["complete", "needs_review"]},
-                        "ai_change_summary": {"type": "string"},
-                        "ai_evidence_snippets": {"type": "array", "items": {"type": "string"}},
-                        "ai_unresolved_fields": {"type": "array", "items": {"type": "string"}},
-                    },
-                    "required": [
-                        "row_index",
-                        *METADATA_COLUMNS,
-                        "ai_metadata_status",
-                        "ai_change_summary",
-                        "ai_evidence_snippets",
-                        "ai_unresolved_fields",
-                    ],
-                },
-            }
-        },
-        "required": ["records"],
-    }
+    return metadata_check_schema(METADATA_COLUMNS)
 
 
 def build_request_payload(model: str, records: list[dict[str, Any]]) -> dict[str, Any]:
-    instructions = (
-        "You are checking citation metadata for an academic research workflow. "
-        "Use only the supplied markdown text and current metadata. Do not use outside knowledge, web memory, or guesses. "
-        "Revise fields only when the markdown provides evidence or when the current value is plainly contradicted by the markdown. "
-        f"Use '{TO_CONFIRM}' for unresolved fields. Preserve local_source_file and local_markdown_file. "
-        "Return concise evidence snippets copied from the markdown for material changes. "
-        "Do not fabricate authors, dates, volume, issue, pages, DOI, publisher, URL, journal, or country context."
+    return AIClient(api_key="payload-build-only", default_model=model).build_payload(
+        model=model,
+        instructions=build_metadata_check_prompt(TO_CONFIRM),
+        input_data={"records": records},
+        schema=checked_schema(),
+        schema_name="metadata_check_batch",
     )
-    return {
-        "model": model,
-        "instructions": instructions,
-        "input": [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": json.dumps({"records": records}, ensure_ascii=False),
-                    }
-                ],
-            }
-        ],
-        "text": {
-            "format": {
-                "type": "json_schema",
-                "name": "metadata_check_batch",
-                "schema": checked_schema(),
-                "strict": True,
-            }
-        },
-    }
 
 
 def call_openai_metadata_check(
@@ -195,24 +139,18 @@ def call_openai_metadata_check(
     timeout: int = 120,
     retries: int = 2,
 ) -> list[dict[str, Any]]:
-    payload = build_request_payload(model, records)
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    last_error: Exception | None = None
-    for attempt in range(retries + 1):
-        try:
-            response = requests.post(OPENAI_RESPONSES_URL, headers=headers, json=payload, timeout=timeout)
-            if response.status_code in {429, 500, 502, 503, 504} and attempt < retries:
-                time.sleep(2**attempt)
-                continue
-            response.raise_for_status()
-            parsed = json.loads(extract_output_text(response.json()))
-            return list(parsed.get("records", []))
-        except Exception as exc:
-            last_error = exc
-            if attempt < retries:
-                time.sleep(2**attempt)
-                continue
-    raise RuntimeError(f"OpenAI metadata check failed: {last_error}")
+    try:
+        parsed = AIClient(api_key=api_key, default_model=model).responses_json(
+            instructions=build_metadata_check_prompt(TO_CONFIRM),
+            input_data={"records": records},
+            schema=checked_schema(),
+            schema_name="metadata_check_batch",
+            timeout=timeout,
+            retries=retries,
+        )
+        return list(parsed.get("records", []))
+    except Exception as exc:
+        raise RuntimeError(f"OpenAI metadata check failed: {exc}") from exc
 
 
 def normalize_checked_record(item: dict[str, Any], original: pd.Series) -> tuple[dict[str, str], dict[str, str]]:
@@ -268,7 +206,7 @@ def refresh_citation_keys(rows: list[dict[str, str]]) -> list[dict[str, str]]:
     return refreshed
 
 
-def write_checked_outputs(project_dir: Path, metadata: pd.DataFrame, review: pd.DataFrame, apply: bool = False) -> dict[str, Path]:
+def write_checked_outputs(project_dir: Path, metadata: pd.DataFrame, review: pd.DataFrame, apply: bool = False, model: str = "") -> dict[str, Path]:
     p = paths(project_dir)
     metadata_dir = p["metadata"].parent
     metadata_dir.mkdir(parents=True, exist_ok=True)
@@ -291,7 +229,15 @@ def write_checked_outputs(project_dir: Path, metadata: pd.DataFrame, review: pd.
     pd.DataFrame(key_rows, columns=KEY_MAP_COLUMNS).to_csv(p["key_map"], index=False, encoding="utf-8")
     write_apa(p["apa"], rows)
     write_bib(p["bib"], rows)
-    write_log(p["log"], len(rows), len(review), apply)
+    write_log(
+        p["log"],
+        len(rows),
+        len(review),
+        apply,
+        model=model,
+        input_paths=[p["metadata"]],
+        output_paths=[p["checked_metadata"], p["review"], p["key_map"], p["apa"], p["bib"]],
+    )
     if apply:
         backup = p["metadata"].with_suffix(f".{datetime.now().strftime('%Y%m%d_%H%M%S')}.bak.csv")
         backup.write_bytes(p["metadata"].read_bytes())
@@ -312,23 +258,28 @@ def write_bib(path: Path, rows: list[dict[str, str]]) -> None:
     path.write_text("\n\n".join(bibtex_entry(row) for row in useful).rstrip() + ("\n" if useful else ""), encoding="utf-8")
 
 
-def write_log(path: Path, records: int, checked: int, apply: bool) -> None:
-    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    path.write_text(
-        "\n".join(
-            [
-                "# AI Metadata Check Log",
-                "",
-                f"Timestamp: {stamp}",
-                f"Records in output: {records}",
-                f"Records AI-checked this run: {checked}",
-                f"Applied to canonical metadata_table.csv: {'yes' if apply else 'no'}",
-                "",
-                "AI was instructed to use only local markdown and existing metadata, with unresolved fields left as To be confirmed.",
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
+def write_log(
+    path: Path,
+    records: int,
+    checked: int,
+    apply: bool,
+    model: str = "",
+    input_paths: list[Path] | None = None,
+    output_paths: list[Path] | None = None,
+) -> None:
+    write_ai_run_log(
+        path,
+        task_name="metadata_check",
+        model=model or "see review report",
+        input_paths=input_paths or [],
+        output_paths=output_paths or [],
+        counts={
+            "records_in_output": records,
+            "records_succeeded": checked,
+            "records_failed": max(records - checked, 0),
+            "applied_to_canonical_metadata_table": "yes" if apply else "no",
+        },
+        prompt_version="metadata_check_v1",
     )
 
 
@@ -368,14 +319,14 @@ def run_ai_metadata_check(
         updated += count
 
     review_df = pd.concat(all_reviews, ignore_index=True) if all_reviews else pd.DataFrame(columns=REVIEW_COLUMNS)
-    out_paths = write_checked_outputs(project_dir, revised, review_df, apply=apply)
+    out_paths = write_checked_outputs(project_dir, revised, review_df, apply=apply, model=model)
     return {"selected": len(selected), "updated": updated, "paths": out_paths}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Use OpenAI to check deterministic citation metadata against local markdown.")
     parser.add_argument("--project", default=str(DEFAULT_PROJECT), help="Project directory")
-    parser.add_argument("--model", default=os.getenv("AI_METADATA_MODEL", DEFAULT_MODEL), help="OpenAI model for metadata checking")
+    parser.add_argument("--model", default=get_env_model("AI_METADATA_MODEL", DEFAULT_MODEL), help="OpenAI model for metadata checking")
     parser.add_argument("--batch-size", type=int, default=1, help="Metadata records per API request")
     parser.add_argument("--limit", type=int, help="Maximum records to check")
     parser.add_argument("--offset", type=int, default=0, help="Start at this metadata row offset")

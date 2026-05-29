@@ -1,20 +1,24 @@
 from __future__ import annotations
 
 import argparse
-import json
-import os
-import time
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-import requests
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from scripts.ai.client import AIClient, extract_output_text, get_env_model, load_dotenv, require_api_key
+from scripts.ai.logging import write_ai_run_log
+from scripts.ai.prompts import build_candidate_screening_prompt
+from scripts.ai.schemas import SCREENING_ACTIONS, SCREENING_LABELS, candidate_screening_schema
 
 
 DEFAULT_PROJECT = Path("projects/sample_project")
 DEFAULT_MODEL = "gpt-5-nano"
-OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 
 AI_COLUMNS = [
     "ai_relevance_label",
@@ -27,21 +31,8 @@ AI_COLUMNS = [
     "ai_model",
 ]
 
-RELEVANCE_LABELS = [
-    "highly_relevant",
-    "possibly_relevant",
-    "background_only",
-    "out_of_scope",
-    "insufficient_metadata",
-]
-
-SUGGESTED_ACTIONS = [
-    "screen_full_text",
-    "keep_for_background",
-    "exclude_after_human_review",
-    "needs_metadata_check",
-    "needs_query_followup",
-]
+RELEVANCE_LABELS = SCREENING_LABELS
+SUGGESTED_ACTIONS = SCREENING_ACTIONS
 
 
 def repo_root() -> Path:
@@ -53,25 +44,12 @@ def resolve_project(project: str | Path) -> Path:
     return path if path.is_absolute() else repo_root() / path
 
 
-def load_dotenv(path: Path) -> None:
-    if not path.exists():
-        return
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        if key and key not in os.environ:
-            os.environ[key] = value.strip().strip('"').strip("'")
-
-
 def get_api_key(dotenv_path: Path | None = None) -> str:
     if dotenv_path:
         load_dotenv(dotenv_path)
     else:
         load_dotenv(repo_root() / ".env")
-    return os.getenv("OPENAI_API_KEY", "").strip()
+    return require_api_key(dry_run=True) or ""
 
 
 def ensure_ai_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -141,98 +119,27 @@ def rows_to_screen(
 
 
 def screening_schema() -> dict[str, Any]:
-    return {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "screenings": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "row_index": {"type": "integer"},
-                        "candidate_id": {"type": "string"},
-                        "ai_relevance_label": {"type": "string", "enum": RELEVANCE_LABELS},
-                        "ai_confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                        "ai_reason": {"type": "string"},
-                        "ai_suggested_action": {"type": "string", "enum": SUGGESTED_ACTIONS},
-                        "ai_key_terms": {"type": "array", "items": {"type": "string"}},
-                        "ai_metadata_warnings": {"type": "string"},
-                    },
-                    "required": [
-                        "row_index",
-                        "candidate_id",
-                        "ai_relevance_label",
-                        "ai_confidence",
-                        "ai_reason",
-                        "ai_suggested_action",
-                        "ai_key_terms",
-                        "ai_metadata_warnings",
-                    ],
-                },
-            }
-        },
-        "required": ["screenings"],
-    }
+    return candidate_screening_schema()
 
 
 def build_request_payload(model: str, research_brief: str, candidates: list[dict[str, Any]]) -> dict[str, Any]:
-    instructions = (
-        "You are screening candidate academic papers for a conservative research workflow. "
-        "Use only the supplied research brief and candidate metadata. Do not invent papers, findings, URLs, DOIs, or full-text availability. "
-        "Do not make final human decisions. Return screening suggestions only. "
-        "Prioritize direct Radiologic Technology or radiography licensure evidence, especially Philippine studies. "
-        "Allied health licensure prediction studies can be relevant as supporting/background evidence. "
-        "Exclude clinical imaging technique papers, unrelated radiology clinical papers, and papers with no education/licensure/predictor angle."
-    )
-    return {
-        "model": model,
-        "instructions": instructions,
-        "input": [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": json.dumps(
-                            {
-                                "research_brief": research_brief,
-                                "label_definitions": {
-                                    "highly_relevant": "Directly about Radiologic Technology/radiography licensure, board performance, academic predictors, pre-board/mock board, clinical/internship, or predictive validity.",
-                                    "possibly_relevant": "Likely useful but indirect, incomplete, or not Radiologic Technology-specific.",
-                                    "background_only": "Useful context for licensure, health professions education, policy, or methods but not central evidence.",
-                                    "out_of_scope": "Unrelated to licensure/board performance, education predictors, or health professions assessment.",
-                                    "insufficient_metadata": "Not enough title/abstract/metadata to judge.",
-                                },
-                                "candidates": candidates,
-                            },
-                            ensure_ascii=False,
-                        ),
-                    }
-                ],
-            }
-        ],
-        "text": {
-            "format": {
-                "type": "json_schema",
-                "name": "candidate_screening_batch",
-                "schema": screening_schema(),
-                "strict": True,
-            }
+    return AIClient(api_key="payload-build-only", default_model=model).build_payload(
+        model=model,
+        instructions=build_candidate_screening_prompt(),
+        input_data={
+            "research_brief": research_brief,
+            "label_definitions": {
+                "highly_relevant": "Directly about Radiologic Technology/radiography licensure, board performance, academic predictors, pre-board/mock board, clinical/internship, or predictive validity.",
+                "possibly_relevant": "Likely useful but indirect, incomplete, or not Radiologic Technology-specific.",
+                "background_only": "Useful context for licensure, health professions education, policy, or methods but not central evidence.",
+                "out_of_scope": "Unrelated to licensure/board performance, education predictors, or health professions assessment.",
+                "insufficient_metadata": "Not enough title/abstract/metadata to judge.",
+            },
+            "candidates": candidates,
         },
-    }
-
-
-def extract_output_text(response_json: dict[str, Any]) -> str:
-    if response_json.get("output_text"):
-        return str(response_json["output_text"])
-    parts: list[str] = []
-    for item in response_json.get("output", []):
-        for content in item.get("content", []):
-            if content.get("type") in {"output_text", "text"} and content.get("text"):
-                parts.append(str(content["text"]))
-    return "\n".join(parts)
+        schema=screening_schema(),
+        schema_name="candidate_screening_batch",
+    )
 
 
 def call_openai_screening(
@@ -243,25 +150,28 @@ def call_openai_screening(
     timeout: int = 90,
     retries: int = 2,
 ) -> list[dict[str, Any]]:
-    payload = build_request_payload(model, research_brief, candidates)
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    last_error: Exception | None = None
-    for attempt in range(retries + 1):
-        try:
-            response = requests.post(OPENAI_RESPONSES_URL, headers=headers, json=payload, timeout=timeout)
-            if response.status_code in {429, 500, 502, 503, 504} and attempt < retries:
-                time.sleep(2**attempt)
-                continue
-            response.raise_for_status()
-            data = response.json()
-            parsed = json.loads(extract_output_text(data))
-            return list(parsed.get("screenings", []))
-        except Exception as exc:
-            last_error = exc
-            if attempt < retries:
-                time.sleep(2**attempt)
-                continue
-    raise RuntimeError(f"OpenAI screening request failed: {last_error}")
+    try:
+        parsed = AIClient(api_key=api_key, default_model=model).responses_json(
+            instructions=build_candidate_screening_prompt(),
+            input_data={
+                "research_brief": research_brief,
+                "label_definitions": {
+                    "highly_relevant": "Directly about Radiologic Technology/radiography licensure, board performance, academic predictors, pre-board/mock board, clinical/internship, or predictive validity.",
+                    "possibly_relevant": "Likely useful but indirect, incomplete, or not Radiologic Technology-specific.",
+                    "background_only": "Useful context for licensure, health professions education, policy, or methods but not central evidence.",
+                    "out_of_scope": "Unrelated to licensure/board performance, education predictors, or health professions assessment.",
+                    "insufficient_metadata": "Not enough title/abstract/metadata to judge.",
+                },
+                "candidates": candidates,
+            },
+            schema=screening_schema(),
+            schema_name="candidate_screening_batch",
+            timeout=timeout,
+            retries=retries,
+        )
+        return list(parsed.get("screenings", []))
+    except Exception as exc:
+        raise RuntimeError(f"OpenAI screening request failed: {exc}") from exc
 
 
 def apply_screenings(df: pd.DataFrame, screenings: list[dict[str, Any]], model: str, screened_at: str) -> int:
@@ -327,13 +237,22 @@ def run_screening(
         screenings = call_openai_screening(api_key, model, research_brief, payload_rows)
         updated += apply_screenings(df, screenings, model=model, screened_at=screened_at)
         df.to_csv(csv_path, index=False, encoding="utf-8")
+    write_ai_run_log(
+        project_dir / "01_literature_search" / "ai_screening_log.md",
+        task_name="candidate_screening",
+        model=model,
+        input_paths=[brief_file, csv_path],
+        output_paths=[csv_path],
+        counts={"attempted": len(selected), "succeeded": updated, "failed": max(len(selected) - updated, 0)},
+        prompt_version="candidate_screening_v1",
+    )
     return {"selected": len(selected), "updated": updated, "csv_path": str(csv_path), "backup_path": backup_path}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Use OpenAI to add AI screening suggestions to candidate_papers.csv.")
     parser.add_argument("--project", default=str(DEFAULT_PROJECT), help="Project directory")
-    parser.add_argument("--model", default=os.getenv("AI_SCREENING_MODEL", DEFAULT_MODEL), help="OpenAI model for screening")
+    parser.add_argument("--model", default=get_env_model("AI_SCREENING_MODEL", DEFAULT_MODEL), help="OpenAI model for screening")
     parser.add_argument("--batch-size", type=int, default=20, help="Candidate rows per API request")
     parser.add_argument("--limit", type=int, help="Maximum rows to screen this run")
     parser.add_argument("--offset", type=int, default=0, help="Start at this CSV row offset")
@@ -364,4 +283,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

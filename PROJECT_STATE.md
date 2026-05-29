@@ -1,8 +1,8 @@
 # Project State
 
-Date reviewed: 2026-05-27
+Date reviewed: 2026-05-29
 
-This repository is a local, file-based academic research workflow. It is currently strongest at defining a cautious staged process and partially automating paper discovery, AI-assisted candidate screening, controlled legal OA PDF queueing/downloading, metadata checking, and evidence extraction. It is not yet an autonomous research agent or manuscript writer.
+This repository is a local, file-based academic research workflow. It is currently strongest at defining a cautious staged process and partially automating paper discovery, AI-assisted query generation, candidate screening, controlled legal OA PDF queueing/downloading, metadata checking, evidence extraction, Stage 06 synthesis, and Stage 07 gap analysis. It is not yet an autonomous research agent or manuscript writer.
 
 ## Current Purpose
 
@@ -14,6 +14,7 @@ The workflow is intentionally conservative:
 - It avoids inventing citations, papers, metadata, statistics, and conclusions.
 - It separates search planning, source collection, ingestion, metadata extraction, evidence extraction, synthesis, drafting, and audits.
 - It treats missing information as `To be confirmed.`
+- It permits stable local paper IDs for manually supplied no-DOI sources, but those IDs must be propagated consistently through metadata, evidence, synthesis, and gap-analysis outputs.
 
 ## Repository Structure
 
@@ -27,11 +28,14 @@ Main files and folders:
 - `agents/prompts/`: staged prompt files for the end-to-end academic writing workflow.
 - `projects/sample_project/`: sample project input and generated stage 00 brief files.
 - `scripts/paper_discovery/`: API-assisted paper discovery tools.
+- `scripts/ai/`: shared OpenAI Responses API client, structured schemas, prompt builders, and concise AI run logging for bounded local AI scripts.
 - `scripts/citation_metadata/`: deterministic citation metadata extraction plus optional AI checking from local markdown and project CSVs.
 - `scripts/document_ingestion/`: local PDF-to-markdown conversion helpers.
 - `scripts/evidence_extraction/`: AI-assisted evidence extraction from local markdown and verified metadata.
+- `scripts/synthesis/`: AI-assisted Stage 06 synthesis from extracted evidence and paper summaries.
+- `scripts/gap_analysis/`: AI-assisted Stage 07 gap analysis from synthesis outputs.
 - `scripts/paper_discovery/legacy/`: archived OpenAlex-first discovery scripts retained for reference only.
-- `tests/`: provider, schema, pipeline, AI screening, queue builder, downloader, ingestion, metadata, and secret-protection tests.
+- `tests/`: provider, schema, pipeline, shared AI helper, AI query generation, AI screening, queue builder, downloader, ingestion, metadata, evidence extraction, synthesis, and secret-protection tests.
 
 ## Implemented Workflow Pieces
 
@@ -68,7 +72,7 @@ The following stages are defined as prompts under `agents/prompts/`:
 - Style and formatting review
 - Final assembly
 
-These are not currently automated Python agents. They are detailed prompts that expect an LLM-capable environment to read local files and write local outputs.
+Most later writing/audit stages remain prompt-guided. Stage 07 gap analysis now also has a bounded Python script that writes structured intermediate outputs from Stage 06 synthesis.
 
 ### Paper Discovery Scripts
 
@@ -103,6 +107,16 @@ python scripts\paper_discovery\generate_search_queries.py --project projects/sam
 ```
 
 This helper reads `00_brief/_ai_response.md`, `research_brief.md`, `research_questions.md`, `search_keywords.md`, and `source_strategy.md`. It is deterministic local code and does not call an AI API.
+
+AI-assisted query generation is implemented as:
+
+```powershell
+python -m scripts.paper_discovery.ai_query_generation --project projects/sample_project --limit 40 --dry-run
+python -m scripts.paper_discovery.ai_query_generation --project projects/sample_project --limit 40
+python -m scripts.paper_discovery.ai_query_generation --project projects/sample_project --limit 40 --apply
+```
+
+It uses `scripts/ai/` to generate a query plan and provider-specific query variants from Stage 00 local brief files. It writes `01_literature_search/ai_query_plan.md`, `01_literature_search/ai_query_variants.csv`, `01_literature_search/search_queries_ai.md`, and `logs/ai_query_generation_log.md`. These are search suggestions only, not source records. The deterministic discovery pipeline still owns provider search, normalization, deduplication, and candidate CSV creation.
 
 Candidate screening suggestions can be generated with:
 
@@ -280,6 +294,78 @@ paper_id,citation_key,theme,study_design,population,variables,key_finding,releva
 
 The script is constrained to local markdown and metadata only. It must mark unverifiable details as `To be confirmed.` and does not perform synthesis or manuscript drafting.
 
+## Synthesis
+
+Stage 06 now has an OpenAI-backed local script:
+
+```powershell
+python -m scripts.synthesis.ai_build_synthesis --project projects/sample_project --dry-run
+python -m scripts.synthesis.ai_build_synthesis --project projects/sample_project --overwrite
+```
+
+It uses `scripts/ai/` and reads Stage 05 evidence outputs rather than raw PDFs by default. Inputs are `05_evidence_extraction/evidence_table.csv`, available files under `05_evidence_extraction/paper_summaries/`, and brief/metadata context when present. It writes:
+
+```text
+projects/sample_project/06_synthesis/synthesis_matrix.csv
+projects/sample_project/06_synthesis/theme_matrix.md
+projects/sample_project/06_synthesis/literature_map.md
+projects/sample_project/06_synthesis/synthesis_notes.md
+projects/sample_project/logs/ai_synthesis_log.md
+```
+
+This is structured intermediate synthesis only. It must not invent evidence or citations, must keep uncertain information as `To be confirmed.`, and does not draft the manuscript.
+
+The implementation has been exercised with mocked AI responses and is considered a good bounded handoff from Stage 05 into Stage 06. It validates citation keys and paper IDs against supplied inputs, coerces invalid enum values to `to_be_confirmed`, writes blocked notes when Stage 05 evidence is missing, supports dry runs without an OpenAI key, and refuses to overwrite existing synthesis outputs unless `--overwrite` is supplied.
+
+## Gap Analysis
+
+Stage 07 now has an OpenAI-backed local script:
+
+```powershell
+python -m scripts.gap_analysis.ai_gap_analysis --project projects/sample_project --dry-run
+python -m scripts.gap_analysis.ai_gap_analysis --project projects/sample_project --overwrite
+```
+
+It uses `scripts/ai/` and reads Stage 06 synthesis outputs, plus available Stage 00 brief, Stage 05 evidence, and Stage 04 metadata context. Inputs are `06_synthesis/synthesis_matrix.csv`, `theme_matrix.md`, `literature_map.md`, and `synthesis_notes.md`. It writes:
+
+```text
+projects/sample_project/07_gap_analysis/research_gap_analysis.md
+projects/sample_project/07_gap_analysis/study_contribution.md
+projects/sample_project/07_gap_analysis/problem_statement_refined.md
+projects/sample_project/07_gap_analysis/gap_matrix.csv
+projects/sample_project/logs/ai_gap_analysis_log.md
+```
+
+This is structured intermediate research positioning only. It must not draft the Introduction, Review of Related Literature, Discussion, or full manuscript. It validates gap classifications, contribution types, caution levels, and recommended uses; coerces unsupported enum values to `to_be_confirmed`; writes blocked notes when Stage 06 synthesis is missing; supports dry runs without an OpenAI key; and refuses to overwrite existing Stage 07 outputs unless `--overwrite` is supplied.
+
+## Sample Project Citation Repair
+
+After manually supplied PDFs/markdowns were added, several downstream artifacts had correct citation keys but unresolved or mismatched `paper_id` values. A manual repair pass normalized those project artifacts without changing source evidence content.
+
+Repair log:
+
+```text
+projects/sample_project/logs/citation_key_repair_log.md
+```
+
+Repairs performed:
+
+- Assigned stable local paper IDs for no-DOI local sources:
+  - `Cabatingan2024AdmissionTestProfessionalLicensure` -> `local:admission-test-professional-licensure`
+  - `Tulud2023PerceivedFactorsPerformanceGraduates` -> `local:perceived-factors-performance-graduates`
+  - `Barymon2022PredictionRadiographyCertificationExamination` -> `local:prediction-radiography-certification-examination-scores`
+- Restored exact synthesis citation keys for DOI-backed rows involving `Rabinoa2025MockBoardExaminationResult` and `ChristineGouveia2024PredictiveValidityHesiRadiography`.
+- Renamed affected Stage 05 paper summary files away from `to-be-confirmed_*` and updated their Paper ID headers.
+- Repaired stale `C:\MEGA Cloud\...` metadata path prefixes to the current workspace path under `C:\MEGASync\...`.
+- Removed stale Stage 06/07 validation warnings caused by prior citation-key mismatches.
+- Wrote `.citation_repair.bak` and `.path_repair.bak` backups beside touched files.
+
+Current manual verification:
+
+- No exact `To be confirmed.` values remain in `paper_id`, `citation_key`, or `supporting_synthesis_source` fields across the Stage 04 metadata tables/maps, Stage 05 evidence table, Stage 06 synthesis matrix, and Stage 07 gap matrix.
+- Current `local_source_file` and `local_markdown_file` paths in `metadata_table_ai_checked.csv` resolve on disk.
+- No current Stage 05 summary markdown files start with `to-be-confirmed_`; only repair backups preserve the old filenames.
+
 ## Configuration and Environment
 
 Dependencies:
@@ -291,6 +377,7 @@ PyYAML
 python-slugify
 tqdm
 pytest
+pypdf
 ```
 
 Configuration files:
@@ -324,6 +411,8 @@ Supported environment variables include:
 - `AI_SCREENING_MODEL`
 - `AI_METADATA_MODEL`
 - `AI_EVIDENCE_MODEL`
+- `AI_SYNTHESIS_MODEL`
+- `AI_DISCOVERY_MODEL`
 - `ENABLE_OPENALEX`
 - `ENABLE_CROSSREF`
 - `ENABLE_UNPAYWALL`
@@ -338,14 +427,21 @@ Supported environment variables include:
 Current test files:
 
 ```text
+tests/test_ai_build_synthesis.py
 tests/test_ai_check_metadata.py
+tests/test_ai_client.py
 tests/test_ai_extract_evidence.py
+tests/test_ai_gap_analysis.py
+tests/test_ai_logging.py
+tests/test_ai_query_generation.py
+tests/test_ai_schemas.py
 tests/test_ai_screen_candidates.py
 tests/test_build_download_queue_from_ai.py
 tests/test_candidate_schema.py
 tests/test_discovery_pipeline.py
 tests/test_download_pdfs.py
 tests/test_extract_metadata.py
+tests/test_generate_search_queries.py
 tests/test_provider_layer.py
 tests/test_pdf_to_markdown.py
 tests/test_secret_protection.py
@@ -359,9 +455,14 @@ Coverage includes:
 - Main discovery pipeline import and missing-query template behavior.
 - Main discovery pipeline candidate CSV output using mocked provider results.
 - Partial pipeline results when a query/provider call fails.
+- Shared AI client payload construction, schema definitions, and run-log writing.
+- AI query generation prompt/request behavior, dry-run behavior, and output contracts.
 - AI screening helper behavior without live OpenAI calls.
 - AI metadata checking request construction, local-evidence guardrails, revision application, checked output files, and dry-run behavior without live OpenAI calls.
 - AI evidence extraction request construction, local-evidence guardrails, metadata source preference, output files, evidence table schema, and dry-run behavior without live OpenAI calls.
+- AI synthesis request construction, dry-run behavior, blocked-output behavior, overwrite/backups, output file contracts, enum normalization, and citation/paper-ID guardrails without live OpenAI calls.
+- AI gap-analysis request construction, dry-run behavior, blocked-output behavior, partial Stage 06 behavior, overwrite/backups, output file contracts, enum normalization, and citation-marker guardrails without live OpenAI calls.
+- Manual sample-project citation repair was verified outside live API calls by checking `paper_id`, `citation_key`, and `supporting_synthesis_source` fields across Stage 04-07 CSV artifacts.
 - AI-tag download queue filtering, exclusions, tag-specific files, dry-run behavior, and overwrite protection.
 - PDF download success/failure behavior with mocked HTTP responses, SHA-256 hashing, dry-run behavior, tag filtering, and overwrite protection.
 - Deterministic citation metadata extraction output contract, candidate matching, DOI fallback, overwrite protection, dry-run behavior, and conservative filename matching.
@@ -381,20 +482,25 @@ The tests do not currently cover:
 - Live OpenAI API screening calls.
 - Live OpenAI API metadata checking calls.
 - Live OpenAI API evidence extraction calls.
+- Live OpenAI API synthesis calls.
+- Live OpenAI API gap-analysis calls.
 - Prompt file output validation.
+- Automated tests for manual citation-repair scripts; the current repair is logged as a project-specific maintenance action rather than a reusable command.
 
 ## Known Gaps
 
-Current AI/API gaps:
+Current AI/API boundaries and gaps:
 
+- `ai_query_generation.py` calls the OpenAI Responses API for query plans and provider-specific search variants only.
 - `ai_screen_candidates.py` calls the OpenAI Responses API for candidate screening suggestions only.
 - `ai_check_metadata.py` calls the OpenAI Responses API to check first-pass citation metadata against local markdown evidence.
 - `ai_extract_evidence.py` calls the OpenAI Responses API to extract structured evidence from local markdown.
+- `ai_build_synthesis.py` calls the OpenAI Responses API to organize Stage 05 evidence into Stage 06 synthesis artifacts, not manuscript prose.
+- `ai_gap_analysis.py` calls the OpenAI Responses API to organize Stage 06 synthesis into Stage 07 research-positioning artifacts, not manuscript prose.
+- These OpenAI-backed scripts share `scripts/ai/` for client behavior, schemas, prompt text, and concise run metadata logs. Logs record paths and counts, not full paper text.
 - `build_download_queue_from_ai.py` turns AI tags into a legal OA download queue without treating them as human inclusion decisions.
 - `download_pdfs.py` downloads only queued rows with explicit PDF URLs and records success only when a local file exists.
-- No general-purpose structured LLM client exists yet.
-- No persistent AI run log exists.
-- The AI screening and metadata-check scripts use JSON schema requests, but no shared Pydantic model exists for AI outputs.
+- The AI layer is intentionally lightweight and schema-dict based; no shared Pydantic model exists for AI outputs.
 - No automatic parsing of `_ai_response.md` into stage 00 files.
 - Prompt stages are hard-coded to `projects/sample_project/`.
 - Legacy OpenAlex-first scripts are archived for reference and should not be used as the main workflow.
@@ -402,56 +508,65 @@ Current AI/API gaps:
 - First-pass deterministic citation metadata extraction is implemented in `scripts/citation_metadata/extract_metadata.py`.
 - Optional AI metadata checking is implemented in `scripts/citation_metadata/ai_check_metadata.py`.
 - AI evidence extraction from cleaned markdown is implemented in `scripts/evidence_extraction/ai_extract_evidence.py`.
+- AI-assisted Stage 06 synthesis is implemented in `scripts/synthesis/ai_build_synthesis.py` as structured intermediate outputs.
+- AI-assisted Stage 07 gap analysis is implemented in `scripts/gap_analysis/ai_gap_analysis.py` as structured intermediate outputs.
+- Outline creation, writing stages, audits, and final assembly remain prompt-guided unless implemented later.
 - No human review workflow is encoded for accepting or rejecting AI screening suggestions.
 - No caching layer exists for provider responses or LLM responses.
 - Cost/token reporting and batch resume ergonomics are still minimal.
+- Manual citation/path repairs are currently project-specific maintenance steps. If this recurs across projects, add a reusable audit/repair script for metadata path validity, no-DOI local paper IDs, and citation-key propagation.
 
-## Recommended First AI Integration
+## Implemented AI Integration Path
 
-The first AI integration should target paper discovery, not full manuscript writing.
+The first AI integration path targeted paper discovery, then extended the same bounded pattern through metadata checking, evidence extraction, synthesis, and gap analysis rather than full manuscript writing.
 
 Reason:
 
 - Discovery has bounded inputs and outputs.
 - Existing scripts already handle deterministic provider work.
-- AI can add value by generating queries and explaining relevance.
+- AI can add value by generating queries, explaining relevance, checking local metadata, extracting evidence, organizing synthesis, and structuring research positioning.
 - Bad AI behavior can be contained if suggestions are separated from accepted screening decisions.
 
-### Proposed Scope
+### Implemented Scope
 
-Add AI assistance for:
+Implemented AI assistance now covers:
 
 1. Query generation from `00_brief/`.
 2. Query expansion into provider-specific variants.
 3. Candidate relevance review from normalized metadata.
 4. Screening suggestions with explicit reasons.
 5. Metadata conflict notes where provider records disagree.
+6. Metadata checking against local markdown.
+7. Evidence extraction from cleaned local markdown.
+8. Stage 06 synthesis from Stage 05 evidence outputs.
+9. Stage 07 gap analysis from Stage 06 synthesis outputs.
 
-Current implementation status: candidate relevance review and screening suggestions are implemented as `scripts/paper_discovery/ai_screen_candidates.py`. Controlled legal OA queue generation from AI tags is implemented as `scripts/paper_discovery/build_download_queue_from_ai.py`, and queued explicit PDF URLs can be downloaded with `scripts/paper_discovery/download_pdfs.py`. AI metadata checking against local markdown is implemented as `scripts/citation_metadata/ai_check_metadata.py`. Query generation is still deterministic local code, not an AI API call.
+Current implementation status: AI-assisted query generation and provider-specific query expansion are implemented as `scripts/paper_discovery/ai_query_generation.py`. Candidate relevance review and screening suggestions are implemented as `scripts/paper_discovery/ai_screen_candidates.py`. Controlled legal OA queue generation from AI tags is implemented as `scripts/paper_discovery/build_download_queue_from_ai.py`, and queued explicit PDF URLs can be downloaded with `scripts/paper_discovery/download_pdfs.py`. AI metadata checking against local markdown is implemented as `scripts/citation_metadata/ai_check_metadata.py`. AI evidence extraction is implemented as `scripts/evidence_extraction/ai_extract_evidence.py`. AI-assisted Stage 06 synthesis is implemented as `scripts/synthesis/ai_build_synthesis.py`. AI-assisted Stage 07 gap analysis is implemented as `scripts/gap_analysis/ai_gap_analysis.py`.
 
-Do not initially add:
+Do not add:
 
 - Automatic inclusion or exclusion without human review.
 - Automatic manuscript drafting.
 - Automatic unsupported citation generation.
 - Automatic PDF downloading beyond current OA queue rules.
 
-### Suggested Output Files
+### AI Discovery Output Files
 
-For AI discovery work, add outputs under:
+For AI discovery work, outputs live under:
 
 ```text
 projects/sample_project/01_literature_search/
 ```
 
-Suggested files:
+Files:
 
 - `ai_query_plan.md`
 - `ai_query_variants.csv`
-- `ai_screening_suggestions.csv`
-- `ai_discovery_run_log.md`
+- `search_queries_ai.md`
+- AI suggestion columns in `candidate_papers.csv`
+- `logs/ai_query_generation_log.md`
 
-Suggested `ai_screening_suggestions.csv` fields:
+AI screening is stored in AI-only candidate CSV columns rather than a separate accepted-decision file. Expected screening fields include:
 
 ```csv
 candidate_id,title,doi,source_providers,ai_relevance_label,ai_confidence,ai_reason,suggested_action,metadata_warnings,human_decision,human_notes
@@ -473,9 +588,9 @@ Suggested actions:
 - `needs_metadata_check`
 - `needs_query_followup`
 
-### Suggested Implementation Files
+### Implemented Shared AI Files
 
-Add a small AI integration layer rather than embedding provider logic in LLM code:
+The shared AI layer keeps provider logic out of LLM-facing scripts:
 
 ```text
 scripts/
@@ -490,47 +605,57 @@ scripts/
   paper_discovery/
     ai_query_generation.py
     ai_screen_candidates.py
+  citation_metadata/
+    ai_check_metadata.py
+  evidence_extraction/
+    ai_extract_evidence.py
+  synthesis/
+    ai_build_synthesis.py
+  gap_analysis/
+    ai_gap_analysis.py
 ```
 
-Suggested responsibilities for a future shared AI layer:
+Current responsibilities:
 
 - `client.py`: wraps the selected LLM provider, environment variables, retries, and JSON response validation.
-- `schemas.py`: contains typed output schemas for query plans and screening suggestions.
+- `schemas.py`: contains structured output schemas for query plans, screening suggestions, metadata checks, evidence extraction, synthesis, and gap analysis.
 - `prompts.py`: stores prompt templates as versioned strings or loads markdown templates.
 - `logging.py`: writes model, prompt version, input file hashes, output file paths, and errors.
 - `ai_query_generation.py`: reads `00_brief/`, writes query plan and query variants.
-- `ai_screen_candidates.py`: already reads canonical candidate CSV and writes AI suggestions only; it can later be refactored to use a shared client.
+- `ai_screen_candidates.py`: reads canonical candidate CSV and writes AI suggestions only.
+- `ai_check_metadata.py`: checks deterministic metadata against supplied markdown evidence.
+- `ai_extract_evidence.py`: extracts Stage 05 evidence from local cleaned markdown.
+- `ai_build_synthesis.py`: builds Stage 06 synthesis artifacts from Stage 05 evidence outputs.
+- `ai_gap_analysis.py`: builds Stage 07 gap-analysis artifacts from Stage 06 synthesis outputs.
 
-### Suggested Environment Variables
+### AI Environment Variables
 
-Add later when AI integration begins:
+Supported AI environment variables include:
 
 ```text
 OPENAI_API_KEY=
-OPENAI_MODEL=
-OPENAI_DISCOVERY_MODEL=
-AI_MAX_CANDIDATES_PER_BATCH=
-AI_DRY_RUN=true
-```
-
-Current screening default:
-
-```text
 AI_SCREENING_MODEL=gpt-5-nano
+AI_METADATA_MODEL=gpt-5-nano
+AI_EVIDENCE_MODEL=gpt-5-mini
+AI_SYNTHESIS_MODEL=gpt-5-mini
+AI_GAP_MODEL=gpt-5-mini
+AI_DISCOVERY_MODEL=gpt-5-mini
 ```
 
 The API key belongs in the shell environment or a local ignored `.env` file. Do not commit real API keys.
 
 ## Recommended Technical Sequence
 
-1. Run the main discovery pipeline against a real project query set and inspect canonical `candidate_papers.csv`.
-2. Decide whether legal OA queue generation should be rebuilt around the canonical schema or kept as a manual/legacy step.
-3. Add AI query generation in dry-run mode that writes prompts and expected output paths without calling an API.
-4. Add an LLM client with structured JSON output and tests using fake responses.
-5. Add AI candidate screening suggestions.
-6. Keep human decisions in separate fields from AI suggestions.
-7. Add README instructions for the AI-assisted discovery mode.
+1. Run or refresh the main discovery pipeline against a real project query set and inspect canonical `candidate_papers.csv`.
+2. Run AI screening only as a suggestion layer and keep human decisions in separate fields.
+3. Build the legal OA queue from accepted AI tags and manually inspect failed or missing-PDF rows.
+4. Convert text-bearing PDFs to markdown and run deterministic metadata extraction.
+5. Run AI metadata checking and apply only after reviewing checked outputs.
+6. Run AI evidence extraction from local markdown.
+7. Run AI synthesis from Stage 05 outputs, then manually review Stage 06 before gap analysis.
+8. Run AI gap analysis from reviewed Stage 06 outputs, then manually review Stage 07 before outlining or drafting.
+9. Keep prompt-guided writing and audits separate from AI intermediate-file generation.
 
 ## Current Best Next Task
 
-Before calling an AI API, run `run_discovery_pipeline.py` on real search queries and review the resulting canonical `candidate_papers.csv`. The next implementation step can then add AI query generation or AI screening suggestions without changing the discovery foundation again.
+Run the full implemented chain on a real project subset and review each intermediate artifact: discovery candidates, AI screening suggestions, legal OA queue, markdown ingestion, metadata, evidence extraction, Stage 06 synthesis, and Stage 07 gap analysis. The next development work should focus on either human review ergonomics for accepting AI suggestions or bounded outline-stage automation.
