@@ -14,8 +14,8 @@ This repository provides a staged research writer agent system that can:
 - Organize candidate papers, included sources, excluded sources, download queues, and source notes without fabricating source records.
 - Prepare local source folders for PDFs, HTML captures, and other source documents.
 - Convert available source documents into raw and cleaned markdown for downstream reading.
-- Extract citation metadata into APA 7 references, BibTeX entries, metadata tables, and citation key maps.
-- Extract structured evidence from papers into per-paper summaries and a machine-readable evidence table.
+- Extract citation metadata into APA 7 references, BibTeX entries, metadata tables, and citation key maps, with an optional AI check against local markdown evidence.
+- Extract structured evidence from papers into per-paper summaries and a machine-readable evidence table using local markdown and verified metadata.
 - Build synthesis matrices, theme maps, literature maps, and synthesis notes.
 - Identify research gaps, refine the problem statement, and write a contribution statement.
 - Produce an IMRaD-style manuscript outline, including Introduction, Review of Related Literature, Methodology, Results, Discussion, Conclusion, and Recommendations planning.
@@ -35,8 +35,8 @@ This is not a fully automated web research bot or submission system. The prompt-
 - It does not automatically search the web unless a user explicitly asks an agent to browse in the current task or runs the paper discovery scripts.
 - It does not download papers by default. The optional downloader only downloads legal open-access PDF URLs found through Unpaywall.
 - It does not bypass publisher access controls, use Sci-Hub, or fetch illegal copies.
-- It does not currently call the ChatGPT/OpenAI API by itself. The prompt agents generate or define prompts, but a user still runs those prompts in an LLM environment and saves the resulting files.
-- It does not currently include an automated PDF/HTML-to-markdown converter script. Document ingestion is defined as a prompt-guided workflow stage, not as a finished local converter.
+- It does not call OpenAI by default. The prompt agents generate or define prompts, but a user still runs most prompts in an LLM environment and saves the resulting files. Optional explicit scripts can call OpenAI for candidate screening and citation metadata checking.
+- It includes a basic local PDF-to-markdown converter for text-bearing PDFs, but scanned/image-only files and complex tables may still need manual review or OCR.
 - It does not invent missing source metadata, citations, DOIs, URLs, statistics, sample sizes, p-values, coefficients, or conclusions.
 - It does not run statistical analysis unless explicitly extended or instructed to do so.
 - It does not submit, publish, email, or upload manuscripts.
@@ -46,10 +46,10 @@ This is not a fully automated web research bot or submission system. The prompt-
 
 The repository currently has two levels of automation:
 
-- **Implemented local/API scripts**: the research brief helper creates a prompt file from study notes, and the paper discovery scripts can query scholarly APIs, normalize metadata, deduplicate/rank candidate papers, and write canonical candidate records. Legal OA PDF download remains an explicit separate step.
-- **Prompt-guided workflow stages**: literature screening, source collection decisions, document ingestion to markdown, citation metadata extraction, evidence extraction, synthesis, drafting, and audits are currently specified by agent prompts. A user or LLM environment must run those prompts and save the requested files.
+- **Implemented local/API scripts**: the research brief helper creates a prompt file from study notes; paper discovery scripts can query scholarly APIs, normalize metadata, deduplicate/rank candidate papers, and write canonical candidate records; legal OA PDF queueing/downloading remains explicit; text-bearing PDFs can be converted to raw and cleaned markdown; deterministic citation metadata can be AI-checked against local markdown; cleaned markdown can be used for AI evidence extraction.
+- **Prompt-guided workflow stages**: literature screening, source collection decisions, citation metadata extraction, evidence extraction, synthesis, drafting, and audits are currently specified by agent prompts. A user or LLM environment must run those prompts and save the requested files.
 
-In practical terms, paper finding is partly automated, but manuscript writing and document conversion are not yet fully autonomous.
+In practical terms, paper finding and basic PDF text extraction are partly automated, but manuscript writing and evidence interpretation are not autonomous.
 
 For a detailed implementation handoff, current gaps, and the proposed AI integration path for paper discovery, see:
 
@@ -111,6 +111,7 @@ research_agent/
       ai_screen_candidates.py
       search.py
       candidate_schema.py
+      build_download_queue_from_ai.py
       download_pdfs.py
       legacy/
       config.example.yaml
@@ -323,7 +324,13 @@ projects/sample_project/02_sources/html/
 projects/sample_project/02_sources/other/
 ```
 
-Then run the document ingestion prompt or manually convert the files into the expected markdown folders. If no source files are available, the prompt-guided ingestion stage should create templates and logs that the stage is blocked.
+Then run the local PDF-to-markdown converter for text-bearing PDFs:
+
+```powershell
+python -m scripts.document_ingestion.pdf_to_markdown --project projects/sample_project
+```
+
+It writes raw and cleaned markdown plus an ingestion manifest/log under `03_markdown/`. Use the document ingestion prompt afterward only for manual cleanup, OCR needs, or difficult files.
 
 ## Optional API-Assisted Paper Discovery
 
@@ -341,7 +348,7 @@ The `scripts/paper_discovery/` tools add a controlled API layer before source co
 - **CORE API**: searches repository/full-text records. `CORE_API_KEY` is optional and sent when present.
 - **Direct PDF HTTP requests**: `download_pdfs.py` downloads only explicit legal OA `pdf_url` values already recorded in `download_queue.csv`, then saves files under `02_sources/pdf/`.
 
-The API scripts use `requests`, `pandas`, `PyYAML`, `python-slugify`, and `tqdm` from `requirements.txt`. They respect a configurable request delay and write activity to `logs/paper_discovery_log.md`.
+The API scripts use `requests`, `pandas`, `PyYAML`, `python-slugify`, and `tqdm` from `requirements.txt`. Discovery writes activity to `logs/paper_discovery_log.md`; queue building and PDF downloading write separate logs under `projects/sample_project/logs/`.
 
 ### How the Pipeline Works
 
@@ -442,7 +449,7 @@ There is one recommended discovery pipeline:
 - `run_discovery_pipeline.py` runs the newer multi-provider search layer across enabled providers and writes canonical `candidate_papers.csv` rows.
 - `python -m scripts.paper_discovery.search` runs one direct multi-provider search and can export canonical candidate rows.
 
-The old OpenAlex-first scripts are archived under `scripts/paper_discovery/legacy/` for reference. No AI API calls are included yet.
+The old OpenAlex-first scripts are archived under `scripts/paper_discovery/legacy/` for reference. The discovery/search layer itself is deterministic; AI screening is a separate explicit step.
 
 Search all enabled providers:
 
@@ -566,6 +573,47 @@ python scripts\paper_discovery\ai_screen_candidates.py --project projects/sample
 
 The script creates a timestamped backup of `candidate_papers.csv` before writing unless `--no-backup` is supplied.
 
+### Legal OA Download Queue From AI Tags
+
+After AI screening, build a controlled download queue directly from the AI columns in `candidate_papers.csv`. Do not use a separate AI suggestions CSV as the main input. AI labels are not final inclusion decisions; they only help prioritize manual full-text screening.
+
+Recommended workflow:
+
+```powershell
+python -m scripts.paper_discovery.run_discovery_pipeline --project projects/sample_project --max-results 50 --skip-download
+python -m scripts.paper_discovery.ai_screen_candidates --project projects/sample_project --limit 50 --batch-size 10
+python -m scripts.paper_discovery.build_download_queue_from_ai --project projects/sample_project --tags highly_relevant --overwrite
+python -m scripts.paper_discovery.build_download_queue_from_ai --project projects/sample_project --tags highly_relevant,possibly_relevant --overwrite
+python -m scripts.paper_discovery.build_download_queue_from_ai --project projects/sample_project --tags highly_relevant,possibly_relevant,background_only --actions screen_full_text,keep_for_background --overwrite
+python -m scripts.paper_discovery.build_download_queue_from_ai --project projects/sample_project --tags highly_relevant,possibly_relevant --overwrite
+python -m scripts.paper_discovery.download_pdfs --project projects/sample_project
+```
+
+The queue builder reads `projects/sample_project/01_literature_search/candidate_papers.csv` and writes:
+
+```text
+projects/sample_project/02_sources/download_queue.csv
+projects/sample_project/02_sources/download_queue_by_tag/highly_relevant.csv
+projects/sample_project/02_sources/download_queue_by_tag/possibly_relevant.csv
+projects/sample_project/02_sources/download_queue_by_tag/background_only.csv
+projects/sample_project/02_sources/download_queue_excluded.csv
+projects/sample_project/logs/download_queue_log.md
+```
+
+By default it queues only `highly_relevant` rows with `ai_suggested_action=screen_full_text` and checks DOI-only rows through Unpaywall. Use `--tags`, `--actions`, and `--min-confidence` to broaden or narrow the queue. Use `--no-unpaywall` to skip OA lookup; DOI-only rows are then excluded with `needs_oa_lookup`. Unpaywall requires `UNPAYWALL_EMAIL` or `unpaywall_email` in `config.yaml`.
+
+The downloader reads `download_queue.csv`, downloads only rows with `download_status=queued` and non-empty `pdf_url`, saves files under `02_sources/pdf/`, and writes:
+
+```text
+projects/sample_project/02_sources/download_results/success.csv
+projects/sample_project/02_sources/download_results/failed.csv
+projects/sample_project/logs/pdf_download_log.md
+```
+
+`download_queue.csv` is only a queue. `success.csv` and `failed.csv` support manual ingestion and review. Failed reasons such as `missing_pdf_url`, `not_pdf_response`, and `request_failed` help decide whether to manually retrieve a legal copy, exclude the record, or fix metadata. The queue builder and downloader do not modify `candidate_papers.csv`.
+
+No illegal downloads are allowed. The scripts do not bypass paywalls, do not use Sci-Hub, do not fabricate PDF URLs, and do not mark a paper downloaded unless the local file exists.
+
 ### 5. Add Statistical Results Locally
 
 Results interpretation and results writing depend on:
@@ -626,18 +674,52 @@ It only includes sources that are locally present, manually supplied, or already
 
 ### Document Ingestion Agent
 
-Defines the prompt-guided process for converting available source documents to markdown for downstream agents. This repository does not yet include a standalone local converter script for PDFs, HTML captures, or other document formats.
+Defines the prompt-guided process for checking and cleaning converted source documents for downstream agents. A local PDF converter is available:
 
-Outputs:
+```powershell
+python -m scripts.document_ingestion.pdf_to_markdown --project projects/sample_project
+```
 
-- `raw_md/`
-- `cleaned_md/`
-- `ingestion_manifest.csv`
-- `ingestion_log.md`
+The script reads `02_sources/pdf/`, writes `03_markdown/raw_md/`, `03_markdown/cleaned_md/`, `03_markdown/ingestion_manifest.csv`, and `03_markdown/ingestion_log.md`. It uses `pypdf` text extraction with page markers. It does not OCR scanned PDFs, summarize papers, extract evidence, or invent missing text.
 
-It flags scanned PDFs, poor OCR, damaged tables, missing references, scrambled text order, corrupted characters, and other conversion issues.
+### Deterministic Citation Metadata
 
-Until a converter script is added, use this stage by running the prompt in an LLM-capable environment or by manually creating the expected markdown, manifest, and log files.
+After markdown conversion, create first-pass citation metadata without AI:
+
+```powershell
+python -m scripts.citation_metadata.extract_metadata --project projects/sample_project --overwrite
+```
+
+The script reads `candidate_papers.csv`, `download_queue.csv`, `download_results/success.csv`, `03_markdown/cleaned_md/`, and `03_markdown/ingestion_manifest.csv`. It writes:
+
+```text
+projects/sample_project/04_metadata/metadata_table.csv
+projects/sample_project/04_metadata/citation_key_map.csv
+projects/sample_project/04_metadata/references_apa7.md
+projects/sample_project/04_metadata/references.bib
+projects/sample_project/04_metadata/metadata_issues.md
+```
+
+This is conservative deterministic extraction. It matches local markdown back to candidate/download metadata where possible, scans markdown for DOI/year/volume/issue/page clues, and marks unresolved fields as `To be confirmed.` It does not use OpenAI, run web searches, or invent missing citation details.
+
+Optionally, run an AI metadata check after the deterministic first pass:
+
+```powershell
+python -m scripts.citation_metadata.ai_check_metadata --project projects/sample_project --limit 19
+```
+
+This requires `OPENAI_API_KEY` in the shell or ignored `.env` file. It sends each current metadata row and its local cleaned markdown to OpenAI with instructions to use only the supplied evidence. It writes:
+
+```text
+projects/sample_project/04_metadata/metadata_table_ai_checked.csv
+projects/sample_project/04_metadata/metadata_ai_check_report.csv
+projects/sample_project/04_metadata/citation_key_map_ai_checked.csv
+projects/sample_project/04_metadata/references_apa7_ai_checked.md
+projects/sample_project/04_metadata/references_ai_checked.bib
+projects/sample_project/04_metadata/metadata_ai_check_log.md
+```
+
+Use `--apply` only after inspecting the checked outputs; it backs up and replaces `metadata_table.csv`. AI metadata checks must leave unresolved fields as `To be confirmed.` and must not use web knowledge or invent citation details.
 
 ### Citation and Metadata Agent
 
@@ -667,7 +749,13 @@ Incomplete metadata must be marked `To be confirmed.` and should not be treated 
 
 ### Evidence Extraction Agent
 
-Extracts structured evidence from cleaned markdown sources.
+Extracts structured evidence from cleaned markdown sources. A local OpenAI-backed script is available:
+
+```powershell
+python -m scripts.evidence_extraction.ai_extract_evidence --project projects/sample_project --limit 19 --overwrite
+```
+
+The script prefers `04_metadata/metadata_table_ai_checked.csv` when present, otherwise it uses `04_metadata/metadata_table.csv`. It reads the Stage 00 brief files, metadata, and each paper's `local_markdown_file`, then writes:
 
 Outputs:
 
@@ -676,6 +764,8 @@ Outputs:
 - `extraction_log.md`
 
 Each paper summary includes purpose, design, sample, setting, variables, measures, statistical methods, key findings, limitations, relevance, source location, and confidence rating.
+
+This requires `OPENAI_API_KEY`. The default model is `AI_EVIDENCE_MODEL=gpt-5-mini` because this step reads longer paper text and extracts findings, methods, variables, and limitations. The script instructs the model to use only supplied local text and to mark unverifiable details as `To be confirmed.`
 
 ### Synthesis Matrix Agent
 
@@ -858,7 +948,7 @@ The sample project brief is already aligned to:
 
 Downstream literature search, source collection, ingestion, metadata, extraction, synthesis, drafting, audit, and final assembly folders may need to be created by running the matching prompt agents.
 
-The optional paper discovery scripts are present under `scripts/paper_discovery/`. The main pipeline can populate `01_literature_search/candidate_papers.csv` and `logs/paper_discovery_log.md` after you supply search queries and any needed provider credentials. Legal OA download remains a separate explicit step using `download_pdfs.py` and an already prepared `02_sources/download_queue.csv`.
+The optional paper discovery scripts are present under `scripts/paper_discovery/`. The main pipeline can populate `01_literature_search/candidate_papers.csv` and `logs/paper_discovery_log.md` after you supply search queries and any needed provider credentials. Legal OA download remains a separate explicit step using `build_download_queue_from_ai.py` and `download_pdfs.py`.
 
 ## Prompt Quality Notes
 
@@ -888,8 +978,8 @@ One known convention remains: prompts are hard-coded to `projects/sample_project
 5. Populate `candidate_papers.csv` by manually executing searches, running the optional paper discovery pipeline, or providing sources locally.
 6. Run the Source Collection Agent.
 7. Add actual PDFs, HTML captures, or other source files.
-8. Run the Document Ingestion Agent prompt or manually convert local source files into `03_markdown/`.
-9. Run the Citation and Metadata Agent.
+8. Run `python -m scripts.document_ingestion.pdf_to_markdown --project projects/sample_project`, then use the Document Ingestion Agent prompt only for manual cleanup or difficult files.
+9. Run `python -m scripts.citation_metadata.extract_metadata --project projects/sample_project --overwrite`, then use the Citation and Metadata Agent prompt for manual verification or cleanup.
 10. Run the Evidence Extraction Agent.
 11. Run the Synthesis Matrix Agent.
 12. Run the Gap Analysis Agent.

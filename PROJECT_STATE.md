@@ -2,7 +2,7 @@
 
 Date reviewed: 2026-05-27
 
-This repository is a local, file-based academic research workflow. It is currently strongest at defining a cautious staged process and partially automating paper discovery. It is not yet an autonomous research agent, manuscript writer, PDF parser, or OpenAI-integrated application.
+This repository is a local, file-based academic research workflow. It is currently strongest at defining a cautious staged process and partially automating paper discovery, AI-assisted candidate screening, controlled legal OA PDF queueing/downloading, metadata checking, and evidence extraction. It is not yet an autonomous research agent or manuscript writer.
 
 ## Current Purpose
 
@@ -27,8 +27,11 @@ Main files and folders:
 - `agents/prompts/`: staged prompt files for the end-to-end academic writing workflow.
 - `projects/sample_project/`: sample project input and generated stage 00 brief files.
 - `scripts/paper_discovery/`: API-assisted paper discovery tools.
+- `scripts/citation_metadata/`: deterministic citation metadata extraction plus optional AI checking from local markdown and project CSVs.
+- `scripts/document_ingestion/`: local PDF-to-markdown conversion helpers.
+- `scripts/evidence_extraction/`: AI-assisted evidence extraction from local markdown and verified metadata.
 - `scripts/paper_discovery/legacy/`: archived OpenAlex-first discovery scripts retained for reference only.
-- `tests/`: provider, schema, pipeline, and secret-protection tests.
+- `tests/`: provider, schema, pipeline, AI screening, queue builder, downloader, ingestion, metadata, and secret-protection tests.
 
 ## Implemented Workflow Pieces
 
@@ -77,7 +80,21 @@ python scripts\paper_discovery\run_discovery_pipeline.py --project projects/samp
 
 The main pipeline reads `01_literature_search/search_queries.md`, creates a query template if the file is missing, searches the newer multi-provider layer, normalizes records into the canonical candidate schema, merges them into `01_literature_search/candidate_papers.csv`, preserves existing human review fields, and logs to `logs/paper_discovery_log.md`.
 
-It does not automatically run Unpaywall queue generation or PDF download. This is intentional. Legal PDF download remains explicit through `download_pdfs.py`, and only for legal OA `pdf_url` values already recorded in `02_sources/download_queue.csv`.
+It does not automatically run Unpaywall queue generation or PDF download. This is intentional. Legal PDF download remains explicit through `build_download_queue_from_ai.py` and `download_pdfs.py`, and only for legal OA `pdf_url` values recorded in `02_sources/download_queue.csv`.
+
+Current AI-assisted legal OA workflow:
+
+```powershell
+python -m scripts.paper_discovery.run_discovery_pipeline --project projects/sample_project --max-results 50 --skip-download
+python -m scripts.paper_discovery.ai_screen_candidates --project projects/sample_project --limit 50 --batch-size 10
+python -m scripts.paper_discovery.build_download_queue_from_ai --project projects/sample_project --tags highly_relevant --overwrite
+python -m scripts.paper_discovery.build_download_queue_from_ai --project projects/sample_project --tags highly_relevant,possibly_relevant --overwrite
+python -m scripts.paper_discovery.build_download_queue_from_ai --project projects/sample_project --tags highly_relevant,possibly_relevant,background_only --actions screen_full_text,keep_for_background --overwrite
+python -m scripts.paper_discovery.build_download_queue_from_ai --project projects/sample_project --tags highly_relevant,possibly_relevant --overwrite
+python -m scripts.paper_discovery.download_pdfs --project projects/sample_project
+```
+
+The queue builder reads AI tags directly from `01_literature_search/candidate_papers.csv`, writes `02_sources/download_queue.csv`, tag-specific review files, and `02_sources/download_queue_excluded.csv`, and does not modify candidate metadata. The downloader writes `02_sources/download_results/success.csv` and `failed.csv` for manual ingestion decisions. AI labels are prioritization suggestions only, not final inclusion decisions.
 
 First-pass discovery queries can be generated locally from stage 00 brief outputs:
 
@@ -200,6 +217,69 @@ python -m scripts.paper_discovery.search "query text" --export projects/sample_p
 
 Use `--export-format provider` for the older compact export.
 
+## Document Ingestion and Citation Metadata
+
+Text-bearing PDFs can be converted locally:
+
+```powershell
+python -m scripts.document_ingestion.pdf_to_markdown --project projects/sample_project
+```
+
+This writes raw markdown, cleaned markdown, `03_markdown/ingestion_manifest.csv`, and `03_markdown/ingestion_log.md`. It does not OCR scanned PDFs or interpret evidence.
+
+First-pass citation metadata can be generated deterministically:
+
+```powershell
+python -m scripts.citation_metadata.extract_metadata --project projects/sample_project --overwrite
+```
+
+This reads local markdown plus candidate/download metadata and writes `04_metadata/metadata_table.csv`, `citation_key_map.csv`, `references_apa7.md`, `references.bib`, and `metadata_issues.md`. Unknown or unresolved fields are marked `To be confirmed.`
+
+Optional AI checking now exists for Stage 04 metadata:
+
+```powershell
+python -m scripts.citation_metadata.ai_check_metadata --project projects/sample_project --limit 19
+```
+
+The AI checker requires `OPENAI_API_KEY` and sends each metadata row plus its corresponding cleaned markdown to the OpenAI Responses API using a strict JSON schema. It is instructed to use only the supplied local evidence, revise fields only when supported or contradicted by the markdown, preserve local file paths, and keep unresolved fields as `To be confirmed.` It writes checked outputs separately:
+
+```text
+projects/sample_project/04_metadata/metadata_table_ai_checked.csv
+projects/sample_project/04_metadata/metadata_ai_check_report.csv
+projects/sample_project/04_metadata/citation_key_map_ai_checked.csv
+projects/sample_project/04_metadata/references_apa7_ai_checked.md
+projects/sample_project/04_metadata/references_ai_checked.bib
+projects/sample_project/04_metadata/metadata_ai_check_log.md
+```
+
+Use `--apply` only after inspecting the checked files; it backs up and replaces `metadata_table.csv`.
+
+## Evidence Extraction
+
+Stage 05 now has an OpenAI-backed local script:
+
+```powershell
+python -m scripts.evidence_extraction.ai_extract_evidence --project projects/sample_project --limit 19 --overwrite
+```
+
+The script prefers `04_metadata/metadata_table_ai_checked.csv` when present, otherwise `04_metadata/metadata_table.csv`. It reads Stage 00 brief context, metadata rows, and each row's local cleaned markdown file. It sends one paper at a time to the OpenAI Responses API using a strict JSON schema and defaults to `AI_EVIDENCE_MODEL=gpt-5-mini`, which is intentionally stronger than the screening and metadata defaults because evidence extraction reads longer paper text and extracts methods, variables, findings, limitations, relevance notes, and source locations.
+
+Outputs:
+
+```text
+projects/sample_project/05_evidence_extraction/evidence_table.csv
+projects/sample_project/05_evidence_extraction/paper_summaries/
+projects/sample_project/05_evidence_extraction/extraction_log.md
+```
+
+The evidence table uses the prompt contract columns exactly:
+
+```csv
+paper_id,citation_key,theme,study_design,population,variables,key_finding,relevance_to_current_study,source_location,confidence_rating,notes
+```
+
+The script is constrained to local markdown and metadata only. It must mark unverifiable details as `To be confirmed.` and does not perform synthesis or manuscript drafting.
+
 ## Configuration and Environment
 
 Dependencies:
@@ -240,6 +320,10 @@ Supported environment variables include:
 - `CROSSREF_EMAIL`
 - `CROSSREF_PLUS_API_KEY`
 - `UNPAYWALL_EMAIL`
+- `OPENAI_API_KEY`
+- `AI_SCREENING_MODEL`
+- `AI_METADATA_MODEL`
+- `AI_EVIDENCE_MODEL`
 - `ENABLE_OPENALEX`
 - `ENABLE_CROSSREF`
 - `ENABLE_UNPAYWALL`
@@ -254,9 +338,16 @@ Supported environment variables include:
 Current test files:
 
 ```text
+tests/test_ai_check_metadata.py
+tests/test_ai_extract_evidence.py
+tests/test_ai_screen_candidates.py
+tests/test_build_download_queue_from_ai.py
 tests/test_candidate_schema.py
 tests/test_discovery_pipeline.py
+tests/test_download_pdfs.py
+tests/test_extract_metadata.py
 tests/test_provider_layer.py
+tests/test_pdf_to_markdown.py
 tests/test_secret_protection.py
 ```
 
@@ -268,6 +359,13 @@ Coverage includes:
 - Main discovery pipeline import and missing-query template behavior.
 - Main discovery pipeline candidate CSV output using mocked provider results.
 - Partial pipeline results when a query/provider call fails.
+- AI screening helper behavior without live OpenAI calls.
+- AI metadata checking request construction, local-evidence guardrails, revision application, checked output files, and dry-run behavior without live OpenAI calls.
+- AI evidence extraction request construction, local-evidence guardrails, metadata source preference, output files, evidence table schema, and dry-run behavior without live OpenAI calls.
+- AI-tag download queue filtering, exclusions, tag-specific files, dry-run behavior, and overwrite protection.
+- PDF download success/failure behavior with mocked HTTP responses, SHA-256 hashing, dry-run behavior, tag filtering, and overwrite protection.
+- Deterministic citation metadata extraction output contract, candidate matching, DOI fallback, overwrite protection, dry-run behavior, and conservative filename matching.
+- PDF-to-markdown ingestion success, failed no-text PDFs, dry-run behavior, and overwrite protection.
 - Semantic Scholar, PubMed, Europe PMC, arXiv, and CORE provider parsing.
 - Deduplication across DOI, PMID, and arXiv ID.
 - `.env.example` variable coverage.
@@ -278,9 +376,11 @@ The tests do not currently cover:
 - Real network calls to scholarly APIs.
 - Real project discovery runs with live credentials.
 - Archived legacy script behavior.
-- Unpaywall queue generation from live records.
-- PDF download behavior.
+- Live Unpaywall queue generation from real records.
+- Live PDF download behavior against publisher/repository hosts.
 - Live OpenAI API screening calls.
+- Live OpenAI API metadata checking calls.
+- Live OpenAI API evidence extraction calls.
 - Prompt file output validation.
 
 ## Known Gaps
@@ -288,14 +388,20 @@ The tests do not currently cover:
 Current AI/API gaps:
 
 - `ai_screen_candidates.py` calls the OpenAI Responses API for candidate screening suggestions only.
+- `ai_check_metadata.py` calls the OpenAI Responses API to check first-pass citation metadata against local markdown evidence.
+- `ai_extract_evidence.py` calls the OpenAI Responses API to extract structured evidence from local markdown.
+- `build_download_queue_from_ai.py` turns AI tags into a legal OA download queue without treating them as human inclusion decisions.
+- `download_pdfs.py` downloads only queued rows with explicit PDF URLs and records success only when a local file exists.
 - No general-purpose structured LLM client exists yet.
 - No persistent AI run log exists.
-- The screening script uses a JSON schema request, but no shared Pydantic model exists for AI outputs.
+- The AI screening and metadata-check scripts use JSON schema requests, but no shared Pydantic model exists for AI outputs.
 - No automatic parsing of `_ai_response.md` into stage 00 files.
 - Prompt stages are hard-coded to `projects/sample_project/`.
 - Legacy OpenAlex-first scripts are archived for reference and should not be used as the main workflow.
-- No local PDF or HTML to markdown converter is implemented.
-- No automated evidence extraction from PDFs or markdown is implemented.
+- Basic local PDF-to-markdown conversion is implemented in `scripts/document_ingestion/pdf_to_markdown.py` for text-bearing PDFs.
+- First-pass deterministic citation metadata extraction is implemented in `scripts/citation_metadata/extract_metadata.py`.
+- Optional AI metadata checking is implemented in `scripts/citation_metadata/ai_check_metadata.py`.
+- AI evidence extraction from cleaned markdown is implemented in `scripts/evidence_extraction/ai_extract_evidence.py`.
 - No human review workflow is encoded for accepting or rejecting AI screening suggestions.
 - No caching layer exists for provider responses or LLM responses.
 - Cost/token reporting and batch resume ergonomics are still minimal.
@@ -321,7 +427,7 @@ Add AI assistance for:
 4. Screening suggestions with explicit reasons.
 5. Metadata conflict notes where provider records disagree.
 
-Current implementation status: candidate relevance review and screening suggestions are implemented as `scripts/paper_discovery/ai_screen_candidates.py`. Query generation is still deterministic local code, not an AI API call.
+Current implementation status: candidate relevance review and screening suggestions are implemented as `scripts/paper_discovery/ai_screen_candidates.py`. Controlled legal OA queue generation from AI tags is implemented as `scripts/paper_discovery/build_download_queue_from_ai.py`, and queued explicit PDF URLs can be downloaded with `scripts/paper_discovery/download_pdfs.py`. AI metadata checking against local markdown is implemented as `scripts/citation_metadata/ai_check_metadata.py`. Query generation is still deterministic local code, not an AI API call.
 
 Do not initially add:
 

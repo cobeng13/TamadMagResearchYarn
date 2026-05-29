@@ -10,3 +10,13 @@ venv/
 
 scripts/paper_discovery/config.yaml
 projects/*/logs/
+
+# Generated project artifacts
+projects/*/01_literature_search/candidate_papers.csv
+projects/*/02_sources/
+projects/*/03_markdown/
+projects/*/04_metadata/
+projects/*/05_evidence_extraction/
+
+# Local run captures
+testerrors.md
