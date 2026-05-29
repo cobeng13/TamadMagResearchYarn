@@ -2,12 +2,12 @@
 
 ## Current Study Focus
 
-Predictive value of undergraduate academic performance and pre-board examination results for Radiologic Technologist Licensure Examination (RTLE) outcomes among BS Radiologic Technology graduates in the Philippines (retrospective descriptive-correlational and predictive design).
+Predictive value of clustered academic grades and pre-board grades per cluster for Radiologic Technologist Licensure Examination (RTLE) performance and licensure success across BS Radiologic Technology batches in the Philippines (retrospective descriptive-correlational and predictive design).
 
 ## Evidence Clusters
 
 - RT-specific studies showing pre-board/mock scores predict licensure or institutional outcomes (Rabinoa2025MockBoardExaminationResult, Ampaso2022).
-- Allied-health and radiography multisite evidence supporting GWA and standardized exit/pre-board exams as predictors (ChristineGouveia2024PredictiveValidityHesiRadiography, Flores2024, Wolden2019 meta-analysis).
+- Allied-health and radiography multisite evidence supporting GWA/professional-course averages and standardized exit/pre-board exams as predictors, used cautiously to support cluster-based academic and pre-board operationalization (ChristineGouveia2024PredictiveValidityHesiRadiography, Flores2024, Wolden2019 meta-analysis).
 - Philippine multi-program institutional predictive modeling illustrating methods and operationalization for professional-course averages and mock exams (Garcia2026).
 - Institutional/aggregate analyses demonstrating cohort and institutional effects (Ibañez2025).
 - Methodological literature on assessment construction and psychometrics relevant to pre-board instruments (Bera2024).
@@ -36,6 +36,8 @@ Predictive value of undergraduate academic performance and pre-board examination
 - Garcia2026 (DFA with cross-validation example and operational definitions for predictors)
 
 ## Gaps Identified From Literature
+
+- For the current study objectives, the key local gap is whether clustered academic grades and pre-board grades per cluster explain RTLE board examination grades per cluster and pass/fail licensure success across batches.
 
 - Lack of large, multi-institutional, individual-level Philippine RT datasets linking GWA, professional-course grades, clinical/internship ratings, pre-board scores, and RTLE subject scores—most RT evidence is single-site or review-center specific.
 - Inconsistent operationalization and limited psychometric reporting for institutional pre-board/mock exams (alignment with RTLE To be confirmed).

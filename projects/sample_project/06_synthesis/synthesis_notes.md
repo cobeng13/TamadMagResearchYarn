@@ -12,7 +12,7 @@ completed
 ## Main Themes
 
 - Pre-board / mock examination performance as predictor of licensure success
-- Overall academic performance and professional-course grades as predictors
+- Clustered academic grades and professional-course grade groups as predictors
 - Clinical / internship / practicum performance
 - Non-cognitive, attitudinal, and readiness measures
 - Assessment design, psychometrics, and measurement issues
@@ -22,14 +22,14 @@ completed
 ## Strongest Evidence
 
 - Institutional mock/pre-board exam scores are often positively associated with licensure or certification outcomes in radiography and RT samples (e.g., Rabinoa2025MockBoardExaminationResult; ChristineGouveia2024PredictiveValidityHesiRadiography).
-- Overall in-program academic performance (GWA/professional-course averages) is a plausible predictor of licensure exam performance based on allied-health evidence and RT operational precedents (Flores2024; Wolden2019; Garcia2026).
+- Clustered in-program academic performance, derived from GWA/professional-course grade evidence where appropriate, is a plausible predictor of licensure exam performance based on allied-health evidence and RT operational precedents (Flores2024; Wolden2019; Garcia2026).
 - Periodic institutional written assessments (monthly exams) can strongly predict institutional comprehensive exam outcomes within single-institution RT samples (Ampaso2022), but transferability to national RTLE requires confirmation.
 - Assessment instrument design and psychometric evaluation (blueprint alignment, difficulty ratings, reliability, correction-for-guessing) are important prerequisites before using pre-board scores as predictive inputs (Bera2024).
 
 ## Weakest or Most Uncertain Evidence
 
 - Evidence rows (107) exceed batch-size (20); using one bounded request with all selected rows.
-- Large multi-institutional, individual-level Philippine RT datasets linking GWA, detailed professional-course grades, pre-board item-level scores, clinical/practicum ratings, review center participation, first-time vs retaker status, and PRC RTLE subject-area scores.
+- Large individual-level Philippine RT datasets linking clustered academic grades, pre-board grades per cluster, batch/cohort, RTLE board examination grades per cluster, and pass/fail licensure outcomes.
 - Psychometric validation (item analyses, reliability coefficients) of commonly used institutional pre-board/mock exams in Philippine RT programs and demonstrated alignment with RTLE content/blueprint.
 - Clear reporting on inclusion/exclusion of repeat examinees, handling of missing cohorts/years (e.g., 2020), and coding conventions for licensure outcomes (directionality of pass/fail coding) in several local studies (To be confirmed).
 - Evaluated (pre-post or controlled) studies of programmatic interventions (mock exam schedules, remediation programs) demonstrating impact on RTLE outcomes.
@@ -37,7 +37,7 @@ completed
 ## Claims Safe to Use Later
 
 - Institutional mock/pre-board exam scores are often positively associated with licensure or certification outcomes in radiography and RT samples (e.g., Rabinoa2025MockBoardExaminationResult; ChristineGouveia2024PredictiveValidityHesiRadiography).
-- Overall in-program academic performance (GWA/professional-course averages) is a plausible predictor of licensure exam performance based on allied-health evidence and RT operational precedents (Flores2024; Wolden2019; Garcia2026).
+- Clustered in-program academic performance, derived from GWA/professional-course grade evidence where appropriate, is a plausible predictor of licensure exam performance based on allied-health evidence and RT operational precedents (Flores2024; Wolden2019; Garcia2026).
 - Periodic institutional written assessments (monthly exams) can strongly predict institutional comprehensive exam outcomes within single-institution RT samples (Ampaso2022), but transferability to national RTLE requires confirmation.
 - Assessment instrument design and psychometric evaluation (blueprint alignment, difficulty ratings, reliability, correction-for-guessing) are important prerequisites before using pre-board scores as predictive inputs (Bera2024).
 
@@ -51,11 +51,11 @@ completed
 ## Missing Evidence / To be confirmed
 
 - Evidence rows (107) exceed batch-size (20); using one bounded request with all selected rows.
-- Large multi-institutional, individual-level Philippine RT datasets linking GWA, detailed professional-course grades, pre-board item-level scores, clinical/practicum ratings, review center participation, first-time vs retaker status, and PRC RTLE subject-area scores.
+- Large individual-level Philippine RT datasets linking clustered academic grades, pre-board grades per cluster, batch/cohort, RTLE board examination grades per cluster, and pass/fail licensure outcomes.
 - Psychometric validation (item analyses, reliability coefficients) of commonly used institutional pre-board/mock exams in Philippine RT programs and demonstrated alignment with RTLE content/blueprint.
 - Clear reporting on inclusion/exclusion of repeat examinees, handling of missing cohorts/years (e.g., 2020), and coding conventions for licensure outcomes (directionality of pass/fail coding) in several local studies (To be confirmed).
 - Evaluated (pre-post or controlled) studies of programmatic interventions (mock exam schedules, remediation programs) demonstrating impact on RTLE outcomes.
 
 ## Recommended Next Step
 
-Assemble an individual-level dataset for the target institution(s) linking GWA, professional-course grades, clinical/internship ratings, pre-board/mock exam raw and (if available) item-level scores, review participation, cohort year, and RTLE outcomes (continuous rating and pass/fail). Before modeling, perform psychometric checks on pre-board instruments (item difficulty, discrimination, reliability, consider correction-for-guessing). Then run staged analyses: descriptive profiling, correlation matrices, univariate screening, multivariable logistic regression for pass/fail with cross-validation, and sensitivity analyses across operationalizations (raw vs corrected pre-board scores; inclusion/exclusion of repeaters). If pooling across institutions, consider multi-level models to account for institution/cohort-level effects. Mark any unresolved data issues explicitly as 'To be confirmed' (cohort years, inclusion of repeaters, exact grade scales, and availability of subject-area RTLE scores).
+Assemble an individual-level dataset linking clustered academic grades, pre-board grades per cluster, batch/cohort, RTLE board examination grades per cluster, pass/fail licensure success, and overall RTLE rating if available. Then run staged analyses: descriptive profiling, correlation matrices, prediction models for RTLE cluster performance, pass/fail prediction models, incremental-value tests to determine whether pre-board grades per cluster add predictive value beyond clustered academic grades, sensitivity analyses across cluster definitions, and across-batch comparisons. Mark unresolved data issues explicitly as 'To be confirmed' (cluster definitions, batch labels, grading scale direction, pre-board/RTLE cluster alignment, and exact available RTLE outcomes).

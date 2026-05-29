@@ -2,11 +2,11 @@
 
 Date reviewed: 2026-05-29
 
-This repository is a local, file-based academic research workflow. It is currently strongest at defining a cautious staged process and partially automating paper discovery, AI-assisted query generation, candidate screening, controlled legal OA PDF queueing/downloading, metadata checking, evidence extraction, Stage 06 synthesis, and Stage 07 gap analysis. It is not yet an autonomous research agent or manuscript writer.
+This repository is a local, file-based academic research workflow. It is currently strongest at defining a cautious staged process and partially automating paper discovery, AI-assisted query generation, candidate screening, controlled legal OA PDF queueing/downloading, metadata checking, evidence extraction, Stage 06 synthesis, Stage 07 gap analysis, Stage 07B project-context refinement, Stage 08 outline generation, Stage 08B human input checkpointing, and Stage 10A statistical results ingestion/interpretation. It is not yet an autonomous research agent or manuscript writer.
 
 ## Current Purpose
 
-The project helps turn study notes, local source files, and statistical outputs into a structured manuscript workflow. The sample project is about predicting Radiologic Technologist Licensure Examination success from academic performance, pre-board results, and related academic indicators.
+The project helps turn study notes, local source files, and statistical outputs into a structured manuscript workflow. The sample project is about predicting Radiologic Technologist Licensure Examination performance and licensure success from clustered academic grades and pre-board grades per cluster across batches.
 
 The workflow is intentionally conservative:
 
@@ -34,8 +34,12 @@ Main files and folders:
 - `scripts/evidence_extraction/`: AI-assisted evidence extraction from local markdown and verified metadata.
 - `scripts/synthesis/`: AI-assisted Stage 06 synthesis from extracted evidence and paper summaries.
 - `scripts/gap_analysis/`: AI-assisted Stage 07 gap analysis from synthesis outputs.
+- `scripts/project_update/`: AI-assisted Stage 07B project-context refinement for outline and writing handoff.
+- `scripts/outline/`: AI-assisted Stage 08 manuscript and section outline generation.
+- `scripts/human_input/`: deterministic Stage 08B human input packet building and answer application.
+- `scripts/results/`: deterministic Stage 10A statistical results ingestion and AI-assisted interpretation notes from supplied local outputs.
 - `scripts/paper_discovery/legacy/`: archived OpenAlex-first discovery scripts retained for reference only.
-- `tests/`: provider, schema, pipeline, shared AI helper, AI query generation, AI screening, queue builder, downloader, ingestion, metadata, evidence extraction, synthesis, and secret-protection tests.
+- `tests/`: provider, schema, pipeline, shared AI helper, AI query generation, AI screening, queue builder, downloader, ingestion, metadata, evidence extraction, synthesis, gap-analysis, project-context update, and secret-protection tests.
 
 ## Implemented Workflow Pieces
 
@@ -72,7 +76,7 @@ The following stages are defined as prompts under `agents/prompts/`:
 - Style and formatting review
 - Final assembly
 
-Most later writing/audit stages remain prompt-guided. Stage 07 gap analysis now also has a bounded Python script that writes structured intermediate outputs from Stage 06 synthesis.
+Most later writing/audit stages remain prompt-guided. Stage 07 gap analysis, Stage 07B project-context refinement, Stage 08 outline generation, Stage 08B human input checkpointing, and Stage 10A statistical results interpretation now have bounded Python scripts that write structured intermediate outputs before drafting.
 
 ### Paper Discovery Scripts
 
@@ -338,6 +342,120 @@ projects/sample_project/logs/ai_gap_analysis_log.md
 
 This is structured intermediate research positioning only. It must not draft the Introduction, Review of Related Literature, Discussion, or full manuscript. It validates gap classifications, contribution types, caution levels, and recommended uses; coerces unsupported enum values to `to_be_confirmed`; writes blocked notes when Stage 06 synthesis is missing; supports dry runs without an OpenAI key; and refuses to overwrite existing Stage 07 outputs unless `--overwrite` is supplied.
 
+## Project Context Update
+
+Stage 07B now has an OpenAI-backed local script:
+
+```powershell
+python -m scripts.project_update.ai_update_project_context --project projects/sample_project --dry-run
+python -m scripts.project_update.ai_update_project_context --project projects/sample_project --overwrite
+```
+
+It uses `scripts/ai/` and reads the original Stage 00 brief files, Stage 06 synthesis outputs, and Stage 07 gap-analysis outputs. Optional context comes from Stage 05 evidence and Stage 04 metadata when present. It writes refined project-context files without modifying original Stage 00 files by default:
+
+```text
+projects/sample_project/00_brief/research_brief_refined.md
+projects/sample_project/00_brief/research_questions_refined.md
+projects/sample_project/00_brief/writing_scope_refined.md
+projects/sample_project/00_brief/agent_instructions_refined.md
+projects/sample_project/08_outline/_context_for_outline.md
+projects/sample_project/09_drafts/_context_for_writers.md
+projects/sample_project/00_brief/project_context_update_summary.md
+projects/sample_project/00_brief/project_context_changes.csv
+projects/sample_project/logs/ai_project_context_update_log.md
+```
+
+This is a structured pass-through feedback loop from synthesis/gap analysis into outline and writing. It updates framing and downstream instructions; it does not draft manuscript prose. It refuses to overwrite refined outputs unless `--overwrite` is supplied, writes blocked status when Stage 07 is missing, supports dry runs without an OpenAI key, validates project-context change rows, sanitizes unsupported citation markers, and preserves original Stage 00 files unless `--overwrite --apply-to-originals` is explicitly used.
+
+## Outline Generation
+
+Stage 08 now has an OpenAI-backed local script:
+
+```powershell
+python -m scripts.outline.ai_build_outline --project projects/sample_project --dry-run
+python -m scripts.outline.ai_build_outline --project projects/sample_project --overwrite
+```
+
+It uses `scripts/ai/` and reads refined Stage 00/Stage 07B context first when present, then falls back to original Stage 00 files. It also reads Stage 06 synthesis, Stage 07 gap-analysis outputs, study notes, optional statistical results/raw tables, and supporting metadata/evidence context. It writes:
+
+```text
+projects/sample_project/08_outline/manuscript_outline.md
+projects/sample_project/08_outline/introduction_outline.md
+projects/sample_project/08_outline/rrl_outline.md
+projects/sample_project/08_outline/methodology_outline.md
+projects/sample_project/08_outline/results_outline.md
+projects/sample_project/08_outline/discussion_outline.md
+projects/sample_project/08_outline/outline_map.csv
+projects/sample_project/08_outline/outline_readiness_checklist.md
+projects/sample_project/logs/ai_outline_log.md
+```
+
+This is structured outline planning only. It must not draft manuscript prose, invent citations, invent methods details, or claim study results. If statistical results or raw tables are missing, Results and result-dependent Discussion items are marked blocked, partial, or `To be confirmed.` It validates outline readiness statuses, backs up existing Stage 08 outputs on overwrite, supports dry runs without an OpenAI key, and sanitizes unsupported citation markers.
+
+## Human Input Checkpoint
+
+Stage 08B now has deterministic local scripts:
+
+```powershell
+python -m scripts.human_input.build_input_packet --project projects/sample_project
+python -m scripts.human_input.apply_input_packet --project projects/sample_project
+```
+
+`build_input_packet.py` scans Stage 08 outlines and available project context for missing human-dependent details, then writes:
+
+```text
+projects/sample_project/human_input/human_input_packet.md
+projects/sample_project/human_input/human_input_questions.csv
+projects/sample_project/human_input/human_input_answers.md
+projects/sample_project/human_input/human_input_status.csv
+projects/sample_project/logs/human_input_packet_log.md
+```
+
+`apply_input_packet.py` parses completed QID answer sections and writes explicit local inputs for later stages:
+
+```text
+projects/sample_project/input/human_confirmed_context.md
+projects/sample_project/input/methodology_details.md
+projects/sample_project/input/statistical_results.md
+projects/sample_project/input/results_availability.md
+projects/sample_project/human_input/human_input_apply_report.md
+projects/sample_project/logs/human_input_apply_log.md
+```
+
+This checkpoint is mostly deterministic and file-based. It does not invent human-only details; blank answers remain unanswered, `To be confirmed` is preserved, and `N/A` is tracked as not applicable. Optional AI use is limited to question wording/grouping and is not used in tests.
+
+## Statistical Results Ingestion and Interpretation
+
+Stage 10A now has a deterministic ingestion script and an OpenAI-backed interpretation script:
+
+```powershell
+python -m scripts.results.ingest_statresults --project projects/sample_project --overwrite
+python -m scripts.results.ai_interpret_results --project projects/sample_project --dry-run
+python -m scripts.results.ai_interpret_results --project projects/sample_project --overwrite
+```
+
+`ingest_statresults.py` reads AI-readable files from `projects/sample_project/statresults/` and optionally `input/raw_tables/`, then writes:
+
+```text
+projects/sample_project/input/statistical_results_manifest.csv
+projects/sample_project/input/statistical_results_compiled.md
+projects/sample_project/input/results_availability.md
+projects/sample_project/logs/statresults_ingest_log.md
+```
+
+`ai_interpret_results.py` uses `scripts/ai/` to map supplied statistical outputs to study objectives without drafting polished Results prose. It reads human-confirmed context, methodology details, results availability, compiled statistical outputs, and Stage 08 Results/Discussion outlines. It writes:
+
+```text
+projects/sample_project/09_drafts/results/results_interpretation_notes.md
+projects/sample_project/09_drafts/results/results_table_notes.md
+projects/sample_project/09_drafts/results/missing_results_to_confirm.md
+projects/sample_project/09_drafts/results/results_by_objective.csv
+projects/sample_project/09_drafts/results/statistical_findings_matrix.csv
+projects/sample_project/logs/ai_results_interpretation_log.md
+```
+
+This stage creates result mapping, interpretation notes, table notes, and missing-results checklists only. It does not run statistical analyses, invent statistical values, infer significance without supplied support, draft final Results prose, or draft Discussion.
+
 ## Sample Project Citation Repair
 
 After manually supplied PDFs/markdowns were added, several downstream artifacts had correct citation keys but unresolved or mismatched `paper_id` values. A manual repair pass normalized those project artifacts without changing source evidence content.
@@ -484,6 +602,7 @@ The tests do not currently cover:
 - Live OpenAI API evidence extraction calls.
 - Live OpenAI API synthesis calls.
 - Live OpenAI API gap-analysis calls.
+- Live OpenAI API outline-generation calls.
 - Prompt file output validation.
 - Automated tests for manual citation-repair scripts; the current repair is logged as a project-specific maintenance action rather than a reusable command.
 
@@ -497,6 +616,9 @@ Current AI/API boundaries and gaps:
 - `ai_extract_evidence.py` calls the OpenAI Responses API to extract structured evidence from local markdown.
 - `ai_build_synthesis.py` calls the OpenAI Responses API to organize Stage 05 evidence into Stage 06 synthesis artifacts, not manuscript prose.
 - `ai_gap_analysis.py` calls the OpenAI Responses API to organize Stage 06 synthesis into Stage 07 research-positioning artifacts, not manuscript prose.
+- `ai_update_project_context.py` calls the OpenAI Responses API to refine Stage 00 project context from Stage 06/07 outputs for outline/writing handoff, not manuscript prose.
+- `ai_build_outline.py` calls the OpenAI Responses API to create Stage 08 outline artifacts from refined context, synthesis, gap analysis, and available results context, not manuscript prose.
+- `ai_interpret_results.py` calls the OpenAI Responses API to map supplied statistical outputs to objectives and table notes, not polished Results prose or Discussion.
 - These OpenAI-backed scripts share `scripts/ai/` for client behavior, schemas, prompt text, and concise run metadata logs. Logs record paths and counts, not full paper text.
 - `build_download_queue_from_ai.py` turns AI tags into a legal OA download queue without treating them as human inclusion decisions.
 - `download_pdfs.py` downloads only queued rows with explicit PDF URLs and records success only when a local file exists.
@@ -510,7 +632,11 @@ Current AI/API boundaries and gaps:
 - AI evidence extraction from cleaned markdown is implemented in `scripts/evidence_extraction/ai_extract_evidence.py`.
 - AI-assisted Stage 06 synthesis is implemented in `scripts/synthesis/ai_build_synthesis.py` as structured intermediate outputs.
 - AI-assisted Stage 07 gap analysis is implemented in `scripts/gap_analysis/ai_gap_analysis.py` as structured intermediate outputs.
-- Outline creation, writing stages, audits, and final assembly remain prompt-guided unless implemented later.
+- AI-assisted Stage 07B project context refinement is implemented in `scripts/project_update/ai_update_project_context.py` as a structured pass-through after gap analysis.
+- AI-assisted Stage 08 outline generation is implemented in `scripts/outline/ai_build_outline.py` as structured intermediate outputs.
+- Stage 08B human input collection and application is implemented in `scripts/human_input/build_input_packet.py` and `scripts/human_input/apply_input_packet.py`.
+- Stage 10A statistical results ingestion and interpretation is implemented in `scripts/results/ingest_statresults.py` and `scripts/results/ai_interpret_results.py`.
+- Results writing, methodology writing, discussion writing, audits, and final assembly remain prompt-guided unless implemented later.
 - No human review workflow is encoded for accepting or rejecting AI screening suggestions.
 - No caching layer exists for provider responses or LLM responses.
 - Cost/token reporting and batch resume ergonomics are still minimal.
@@ -518,13 +644,13 @@ Current AI/API boundaries and gaps:
 
 ## Implemented AI Integration Path
 
-The first AI integration path targeted paper discovery, then extended the same bounded pattern through metadata checking, evidence extraction, synthesis, and gap analysis rather than full manuscript writing.
+The first AI integration path targeted paper discovery, then extended the same bounded pattern through metadata checking, evidence extraction, synthesis, gap analysis, project-context refinement, and outline generation rather than full manuscript writing.
 
 Reason:
 
 - Discovery has bounded inputs and outputs.
 - Existing scripts already handle deterministic provider work.
-- AI can add value by generating queries, explaining relevance, checking local metadata, extracting evidence, organizing synthesis, and structuring research positioning.
+- AI can add value by generating queries, explaining relevance, checking local metadata, extracting evidence, organizing synthesis, structuring research positioning, feeding evidence-informed context into downstream instructions, and building auditable outlines before drafting.
 - Bad AI behavior can be contained if suggestions are separated from accepted screening decisions.
 
 ### Implemented Scope
@@ -540,8 +666,12 @@ Implemented AI assistance now covers:
 7. Evidence extraction from cleaned local markdown.
 8. Stage 06 synthesis from Stage 05 evidence outputs.
 9. Stage 07 gap analysis from Stage 06 synthesis outputs.
+10. Stage 07B project-context refinement from Stage 00, Stage 06, and Stage 07 outputs.
+11. Stage 08 outline generation from refined context, synthesis, gap analysis, and available study/results context.
+12. Stage 08B human input packet building and answer application before drafting.
+13. Stage 10A statistical results ingestion and interpretation from `statresults/` and human-confirmed inputs.
 
-Current implementation status: AI-assisted query generation and provider-specific query expansion are implemented as `scripts/paper_discovery/ai_query_generation.py`. Candidate relevance review and screening suggestions are implemented as `scripts/paper_discovery/ai_screen_candidates.py`. Controlled legal OA queue generation from AI tags is implemented as `scripts/paper_discovery/build_download_queue_from_ai.py`, and queued explicit PDF URLs can be downloaded with `scripts/paper_discovery/download_pdfs.py`. AI metadata checking against local markdown is implemented as `scripts/citation_metadata/ai_check_metadata.py`. AI evidence extraction is implemented as `scripts/evidence_extraction/ai_extract_evidence.py`. AI-assisted Stage 06 synthesis is implemented as `scripts/synthesis/ai_build_synthesis.py`. AI-assisted Stage 07 gap analysis is implemented as `scripts/gap_analysis/ai_gap_analysis.py`.
+Current implementation status: AI-assisted query generation and provider-specific query expansion are implemented as `scripts/paper_discovery/ai_query_generation.py`. Candidate relevance review and screening suggestions are implemented as `scripts/paper_discovery/ai_screen_candidates.py`. Controlled legal OA queue generation from AI tags is implemented as `scripts/paper_discovery/build_download_queue_from_ai.py`, and queued explicit PDF URLs can be downloaded with `scripts/paper_discovery/download_pdfs.py`. AI metadata checking against local markdown is implemented as `scripts/citation_metadata/ai_check_metadata.py`. AI evidence extraction is implemented as `scripts/evidence_extraction/ai_extract_evidence.py`. AI-assisted Stage 06 synthesis is implemented as `scripts/synthesis/ai_build_synthesis.py`. AI-assisted Stage 07 gap analysis is implemented as `scripts/gap_analysis/ai_gap_analysis.py`. AI-assisted Stage 07B project context refinement is implemented as `scripts/project_update/ai_update_project_context.py`. AI-assisted Stage 08 outline generation is implemented as `scripts/outline/ai_build_outline.py`. Stage 08B human input checkpointing is implemented as `scripts/human_input/build_input_packet.py` and `scripts/human_input/apply_input_packet.py`. Stage 10A statistical results ingestion and interpretation is implemented as `scripts/results/ingest_statresults.py` and `scripts/results/ai_interpret_results.py`.
 
 Do not add:
 
@@ -613,12 +743,19 @@ scripts/
     ai_build_synthesis.py
   gap_analysis/
     ai_gap_analysis.py
+  project_update/
+    ai_update_project_context.py
+  outline/
+    ai_build_outline.py
+  human_input/
+    build_input_packet.py
+    apply_input_packet.py
 ```
 
 Current responsibilities:
 
 - `client.py`: wraps the selected LLM provider, environment variables, retries, and JSON response validation.
-- `schemas.py`: contains structured output schemas for query plans, screening suggestions, metadata checks, evidence extraction, synthesis, and gap analysis.
+- `schemas.py`: contains structured output schemas for query plans, screening suggestions, metadata checks, evidence extraction, synthesis, gap analysis, project-context updates, outline generation, and results interpretation.
 - `prompts.py`: stores prompt templates as versioned strings or loads markdown templates.
 - `logging.py`: writes model, prompt version, input file hashes, output file paths, and errors.
 - `ai_query_generation.py`: reads `00_brief/`, writes query plan and query variants.
@@ -627,6 +764,11 @@ Current responsibilities:
 - `ai_extract_evidence.py`: extracts Stage 05 evidence from local cleaned markdown.
 - `ai_build_synthesis.py`: builds Stage 06 synthesis artifacts from Stage 05 evidence outputs.
 - `ai_gap_analysis.py`: builds Stage 07 gap-analysis artifacts from Stage 06 synthesis outputs.
+- `ai_update_project_context.py`: builds Stage 07B refined project-context files and downstream handoff context from Stage 00, Stage 06, and Stage 07 outputs.
+- `ai_build_outline.py`: builds Stage 08 manuscript and section outlines from refined context, synthesis, gap analysis, and available results context.
+- `build_input_packet.py` / `apply_input_packet.py`: build and apply Stage 08B human answer packets before drafting.
+- `ingest_statresults.py`: compiles AI-readable statistical outputs from `statresults/` into a local handoff.
+- `ai_interpret_results.py`: maps supplied statistical outputs to objectives, table notes, and missing-results checklists.
 
 ### AI Environment Variables
 
@@ -639,6 +781,9 @@ AI_METADATA_MODEL=gpt-5-nano
 AI_EVIDENCE_MODEL=gpt-5-mini
 AI_SYNTHESIS_MODEL=gpt-5-mini
 AI_GAP_MODEL=gpt-5-mini
+AI_PROJECT_UPDATE_MODEL=gpt-5-mini
+AI_OUTLINE_MODEL=gpt-5-mini
+AI_RESULTS_MODEL=gpt-5-mini
 AI_DISCOVERY_MODEL=gpt-5-mini
 ```
 
@@ -653,9 +798,15 @@ The API key belongs in the shell environment or a local ignored `.env` file. Do 
 5. Run AI metadata checking and apply only after reviewing checked outputs.
 6. Run AI evidence extraction from local markdown.
 7. Run AI synthesis from Stage 05 outputs, then manually review Stage 06 before gap analysis.
-8. Run AI gap analysis from reviewed Stage 06 outputs, then manually review Stage 07 before outlining or drafting.
-9. Keep prompt-guided writing and audits separate from AI intermediate-file generation.
+8. Run AI gap analysis from reviewed Stage 06 outputs, then manually review Stage 07 before context refinement.
+9. Run `python -m scripts.project_update.ai_update_project_context --project projects/sample_project --overwrite`, then review refined Stage 00/context files.
+10. Run `python -m scripts.outline.ai_build_outline --project projects/sample_project --overwrite`, then review Stage 08 outputs before Stage 09 writing.
+11. Run `python -m scripts.human_input.build_input_packet --project projects/sample_project`, fill `projects/sample_project/human_input/human_input_answers.md`, then run `python -m scripts.human_input.apply_input_packet --project projects/sample_project`.
+12. Place AI-readable statistical outputs in `projects/sample_project/statresults/`.
+13. Run `python -m scripts.results.ingest_statresults --project projects/sample_project --overwrite`.
+14. Run `python -m scripts.results.ai_interpret_results --project projects/sample_project --overwrite`, then review the Stage 10A notes under `09_drafts/results/`.
+15. Keep prompt-guided writing and audits separate from AI intermediate-file generation.
 
 ## Current Best Next Task
 
-Run the full implemented chain on a real project subset and review each intermediate artifact: discovery candidates, AI screening suggestions, legal OA queue, markdown ingestion, metadata, evidence extraction, Stage 06 synthesis, and Stage 07 gap analysis. The next development work should focus on either human review ergonomics for accepting AI suggestions or bounded outline-stage automation.
+Run the full implemented chain on a real project subset and review each intermediate artifact: discovery candidates, AI screening suggestions, legal OA queue, markdown ingestion, metadata, evidence extraction, Stage 06 synthesis, Stage 07 gap analysis, Stage 07B refined context, Stage 08 outlines, Stage 08B human-confirmed inputs, and Stage 10A statistical interpretation notes. The next development work should focus on bounded Results/Discussion writing support or human review ergonomics for accepting AI suggestions.

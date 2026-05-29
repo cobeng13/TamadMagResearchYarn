@@ -5,9 +5,9 @@ Model: gpt-5-mini
 
 ## Proposed Contribution Statement
 
-Provide institution-level, individual-record evidence on the predictive relationships between undergraduate academic performance (GWA and professional-course averages), pre-board/mock exam results (after psychometric preprocessing), and RTLE outcomes (pass/fail and, if available, overall/subject scores), and present methodological guidance on instrument validation and operationalization for Philippine RT programs.
+Provide institution-level, individual-record evidence on the predictive relationships between clustered academic grades, pre-board grades per cluster, and RTLE outcomes (board examination grades per cluster and pass/fail licensure success), and present methodological guidance on cluster operationalization, instrument validation, and across-batch comparison for Philippine RT programs.
 
-Positioning refinement: the contribution should emphasize predictive validity of routinely collected institutional indicators, especially overall academic performance, course-cluster grades, and pre-board examination results. The study should be presented as a local validation and decision-support study, not as a universal novelty claim or causal explanation of RTLE success.
+Positioning refinement: the contribution should emphasize predictive validity of routinely collected institutional indicators, especially clustered academic grades and pre-board grades per cluster. The study should be presented as a local validation and decision-support study across batches, not as a universal novelty claim or causal explanation of RTLE success.
 
 ## Contribution Rationale
 
@@ -24,11 +24,11 @@ The supplied synthesis indicates moderate direct local evidence and stronger ind
 
 ## What This Study Can Safely Claim
 
-- Report associations and predictive model performance for the institutional dataset examined (e.g., logistic regression classification accuracy, effect sizes) and emphasize the institution-specific scope.
+- Report associations and predictive model performance for the institutional dataset examined, including RTLE cluster performance and pass/fail licensure success where available, and emphasize the institution-specific scope.
 - Describe psychometric properties (reliability, item difficulty/discrimination) of the institutional pre-board instrument(s) examined and how measurement choices affect predictive results.
 - Recommend program-level actions (screening, targeted remediation) as evidence-informed suggestions contingent on replication and prospective evaluation.
-- Identify which routinely collected institutional indicators are most useful for early warning, targeted review, and remediation planning.
-- Test whether pre-board examination results add predictive value beyond academic and course-cluster grades, if the dataset supports that analysis.
+- Identify which clustered academic and pre-board indicators are most useful for early warning, targeted review, remediation planning, and across-batch monitoring.
+- Test whether pre-board grades per cluster add predictive value beyond clustered academic grades, if the dataset supports that analysis.
 
 ## What This Study Should Not Claim
 
@@ -49,4 +49,4 @@ The supplied synthesis indicates moderate direct local evidence and stronger ind
 
 ## Contribution Statement for Later Manuscript Use
 
-This retrospective institutional predictive validation study will quantify how undergraduate academic performance, course-cluster grades, and pre-board examination results relate to Radiologic Technologist Licensure Examination outcomes in the examined Philippine BSRT cohort(s), and will document measurement and operational choices needed to produce cautious, institution-specific screening and remediation-planning recommendations.
+This retrospective institutional predictive validation study will quantify how clustered academic grades and pre-board grades per cluster relate to Radiologic Technologist Licensure Examination performance and licensure success across batches in the examined Philippine BSRT cohort(s), and will document measurement and operational choices needed to produce cautious, institution-specific screening, remediation-planning, and batch-monitoring recommendations.

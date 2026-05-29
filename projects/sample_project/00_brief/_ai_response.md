@@ -1,11 +1,29 @@
 ===== research_brief.md =====
 # Research Brief
 
+## Current Objective Update
+The current approved objective framing supersedes the earlier broad academic-performance wording in this generated response.
+
+### General Objective
+To determine the relationship and predictive value of clustered academic grades and pre-board grades per cluster on Radiologic Technologist Licensure Examination performance and licensure success across batches.
+
+### Specific Objectives
+1. Describe the graduates' academic performance profile based on clustered grades.
+2. Describe the graduates' pre-board examination performance per cluster.
+3. Describe the graduates' RTLE outcomes in terms of board examination grades per cluster and pass/fail result.
+4. Determine whether clustered academic grades are significantly related to RTLE performance.
+5. Determine whether pre-board grades per cluster are significantly related to RTLE performance.
+6. Determine whether clustered academic grades and pre-board grades per cluster significantly predict RTLE performance.
+7. Determine whether clustered academic grades and pre-board grades per cluster significantly predict licensure success (pass/fail).
+8. Identify which predictor or predictor set best explains variation in RTLE performance and licensure success.
+9. Determine whether pre-board grades per cluster add predictive value beyond clustered academic grades in explaining RTLE performance and pass/fail outcome.
+10. Compare academic performance, pre-board performance, RTLE performance, and licensure success across batches.
+
 ## Working Title
-Academic Performance, Pre-Board Examination Results, and Radiologic Technologist Licensure Examination Success
+Predictive Value of Clustered Academic Grades and Pre-Board Cluster Grades for Radiologic Technologist Licensure Examination Performance and Licensure Success Across Batches
 
 ## Brief Study Description
-This study will examine whether undergraduate academic performance and pre-board examination results predict Radiologic Technologist Licensure Examination outcomes among Bachelor of Science in Radiologic Technology graduates in the Philippines. The study will use a retrospective descriptive-correlational and predictive design based on available academic records, pre-board examination results, and licensure examination outcomes.
+This study will examine whether clustered academic grades and pre-board grades per cluster are related to and predict Radiologic Technologist Licensure Examination outcomes among Bachelor of Science in Radiologic Technology graduates in the Philippines. The study will use a retrospective descriptive-correlational and predictive design based on available academic records, pre-board examination results, RTLE board examination grades per cluster, pass/fail licensure outcomes, and batch/cohort labels.
 
 ## Research Problem
 Radiologic Technology graduates must pass the Radiologic Technologist Licensure Examination to become registered practitioners. However, licensure performance varies across graduates and institutions. Programs need evidence-based indicators that can identify students who may need academic support before taking the licensure examination. Academic grades, internship or clinical performance, terminal competency assessments, and pre-board examinations may help predict licensure success, but their relative predictive value in Radiologic Technology remains a narrow and researchable issue requiring further review and analysis.
@@ -33,9 +51,9 @@ Philippines. Specific institution, academic years, and licensure examination per
 
 ## Intended Analysis
 - Descriptive statistics for academic, pre-board, and licensure profiles
-- Correlation analysis between predictor variables and licensure ratings or subject-area scores
+- Correlation analysis between clustered academic grades, pre-board grades per cluster, and RTLE board examination grades per cluster
 - Predictive analysis for licensure success, likely using regression or classification models depending on available outcome format
-- Additional subgroup or subject-area analysis: To be confirmed
+- Across-batch comparison and RTLE cluster-level analysis: To be confirmed
 
 ## Scope Boundary
 The study should focus on predictors of licensure success among Radiologic Technology graduates. It should not attempt to evaluate the entire curriculum, compare institutions broadly, or infer causality unless the study design and data support such claims.
@@ -47,46 +65,37 @@ APA 7th edition.
 # Research Questions
 
 ## Main Research Question
-To what extent do academic performance and pre-board examination results predict Radiologic Technologist Licensure Examination success among Bachelor of Science in Radiologic Technology graduates?
+To what extent do clustered academic grades and pre-board grades per cluster relate to and predict Radiologic Technologist Licensure Examination performance and licensure success across batches?
 
-## Specific Research Questions
-1. What is the academic performance profile of the Radiologic Technology graduates in terms of:
-   - General Weighted Average or overall academic performance;
-   - professional course grades;
-   - internship or clinical performance grade, if available;
-   - terminal competency or comprehensive examination results, if available; and
-   - demographic or profile variables, if available?
-
-2. What is the pre-board examination performance of the Radiologic Technology graduates?
-
-3. What are the Radiologic Technologist Licensure Examination outcomes of the graduates in terms of:
-   - licensure rating;
-   - pass or fail result; and
-   - subject-area performance, if available?
-
-4. Is there a significant relationship between academic performance and Radiologic Technologist Licensure Examination performance?
-
-5. Is there a significant relationship between pre-board examination results and Radiologic Technologist Licensure Examination performance?
-
-6. Do academic performance and pre-board examination results significantly predict licensure examination success?
-
-7. Which predictor or set of predictors best explains variation in licensure examination performance or pass/fail outcomes?
+## Specific Research Questions / Objectives
+1. Describe the graduates' academic performance profile based on clustered grades.
+2. Describe the graduates' pre-board examination performance per cluster.
+3. Describe the graduates' RTLE outcomes in terms of board examination grades per cluster and pass/fail result.
+4. Determine whether clustered academic grades are significantly related to RTLE performance.
+5. Determine whether pre-board grades per cluster are significantly related to RTLE performance.
+6. Determine whether clustered academic grades and pre-board grades per cluster significantly predict RTLE performance.
+7. Determine whether clustered academic grades and pre-board grades per cluster significantly predict licensure success (pass/fail).
+8. Identify which predictor or predictor set best explains variation in RTLE performance and licensure success.
+9. Determine whether pre-board grades per cluster add predictive value beyond clustered academic grades in explaining RTLE performance and pass/fail outcome.
+10. Compare academic performance, pre-board performance, RTLE performance, and licensure success across batches.
 
 ## Possible Hypotheses
 The final hypotheses should match the statistical analysis plan and available data.
 
-- H0: Academic performance is not significantly related to Radiologic Technologist Licensure Examination performance.
-- H1: Academic performance is significantly related to Radiologic Technologist Licensure Examination performance.
-- H0: Pre-board examination results are not significantly related to Radiologic Technologist Licensure Examination performance.
-- H1: Pre-board examination results are significantly related to Radiologic Technologist Licensure Examination performance.
-- H0: Academic performance and pre-board examination results do not significantly predict licensure examination success.
-- H1: Academic performance and pre-board examination results significantly predict licensure examination success.
+- H0: Clustered academic grades are not significantly related to RTLE performance.
+- H1: Clustered academic grades are significantly related to RTLE performance.
+- H0: Pre-board grades per cluster are not significantly related to RTLE performance.
+- H1: Pre-board grades per cluster are significantly related to RTLE performance.
+- H0: Clustered academic grades and pre-board grades per cluster do not significantly predict RTLE performance or licensure success.
+- H1: Clustered academic grades and pre-board grades per cluster significantly predict RTLE performance or licensure success.
+- H0: Pre-board grades per cluster do not add predictive value beyond clustered academic grades.
+- H1: Pre-board grades per cluster add predictive value beyond clustered academic grades.
 
 ## Items To Be Confirmed
 - Exact institutional setting
 - Cohort years covered
 - Number of graduates included
-- Whether the outcome variable is continuous licensure rating, binary pass/fail status, subject-area scores, or all of these
+- Whether the outcome variables include RTLE board examination grades per cluster, binary pass/fail status, overall RTLE rating, or all of these
 - Statistical tests already completed or planned
 
 ===== variables.md =====
@@ -96,10 +105,9 @@ The final hypotheses should match the statistical analysis plan and available da
 
 | Variable | Type | Operational Definition | Expected Data Format | Notes |
 |---|---|---|---|---|
-| General Weighted Average or overall academic performance | Independent / predictor | Overall academic performance across the undergraduate program | Numeric grade or equivalent | Grading scale and direction must be confirmed |
-| Professional course grades | Independent / predictor | Grades in major or professional Radiologic Technology courses | Numeric grades or course-specific averages | Course list to be confirmed |
-| Internship or clinical performance grade | Independent / predictor | Performance during internship, clinical practicum, or related practical training | Numeric grade or rating | Availability to be confirmed |
-| Pre-board examination results | Independent / predictor | Performance in institutional mock board, pre-board, or board review assessment | Numeric score, rating, pass/fail, or subject-area scores | Alignment with actual licensure exam should be discussed |
+| Clustered academic grades | Independent / predictor | Academic performance grouped by course cluster or subject domain | Numeric grade per cluster | Course-to-cluster mapping, weighting, and grading scale direction must be confirmed |
+| Pre-board grades per cluster | Independent / predictor | Performance in institutional pre-board or mock board examination grouped by the same or equivalent clusters | Numeric pre-board grade per cluster | Alignment with RTLE board examination clusters should be discussed |
+| Batch or cohort | Grouping / control variable | Graduate or examinee batch used for across-batch comparison and optional model adjustment | Categorical batch label | Batch definitions must be confirmed |
 | Terminal competency or comprehensive examination results | Independent / predictor | Final institutional assessment of program-level competencies | Numeric score, rating, or pass/fail | Include only if available |
 | Demographic/profile variables | Control or descriptive variables | Student characteristics such as sex, age, cohort, or admission-related data | Categorical or numeric | Use only if ethically available and analytically relevant |
 
@@ -107,9 +115,9 @@ The final hypotheses should match the statistical analysis plan and available da
 
 | Variable | Type | Operational Definition | Expected Data Format | Notes |
 |---|---|---|---|---|
-| Licensure examination rating | Dependent / outcome | Overall rating obtained in the Radiologic Technologist Licensure Examination | Numeric rating or percentage | Main continuous outcome if available |
+| Board examination grades per cluster | Dependent / outcome | RTLE performance reported by board examination cluster or subject area | Numeric grade per cluster | Preferred continuous outcome if available |
 | Licensure examination result | Dependent / outcome | Whether the graduate passed or failed the licensure examination | Binary categorical variable | Main classification outcome |
-| Subject-area licensure performance | Dependent / outcome | Performance in specific licensure examination subject areas | Numeric scores or ratings by subject | Availability to be confirmed |
+| Overall licensure examination rating | Dependent / outcome | Overall RTLE rating, if supplied | Numeric rating or percentage | Optional continuous outcome |
 
 ## Possible Covariates
 - Academic year or cohort
@@ -341,13 +349,13 @@ The literature search should prioritize sources in the following order:
 - Recommendations
 
 ## Introduction Scope
-The introduction should establish the importance of licensure examination success in Radiologic Technology education, describe the need to identify academic and assessment-based predictors, and explain why academic performance and pre-board examination results are plausible indicators of licensure readiness. The introduction should end with the study objectives or research questions.
+The introduction should establish the importance of licensure examination success in Radiologic Technology education, describe the need to validate cluster-based academic and assessment predictors, and explain why clustered academic grades and pre-board grades per cluster are plausible indicators of RTLE performance and licensure success. The introduction should end with the updated study objectives.
 
 ## Review of Related Literature Scope
 The Review of Related Literature should synthesize evidence on:
 - Radiologic Technology licensure examination performance.
-- Academic performance and licensure outcomes.
-- Professional course grades and board examination readiness.
+- Clustered academic grades and licensure outcomes.
+- Professional course grade clusters and board examination readiness.
 - Internship or clinical performance as a competency indicator.
 - Pre-board or mock board examinations as readiness measures.
 - Terminal competency or comprehensive examinations.
@@ -367,23 +375,23 @@ The methodology should describe:
 ## Results Scope
 The Results section should present only actual findings from the available dataset. Do not invent numerical results. If results are not yet available, mark tables and values as To be confirmed. Suggested results organization:
 - Participant profile.
-- Academic performance profile.
-- Pre-board examination performance.
-- Licensure examination outcomes.
+- Academic performance profile based on clustered grades.
+- Pre-board examination performance per cluster.
+- RTLE outcomes in terms of board examination grades per cluster and pass/fail result.
 - Correlation results.
 - Predictive model results.
 
 ## Discussion Scope
-The Discussion should interpret findings in relation to Radiologic Technology education and comparable allied health literature. It should explain whether academic performance and pre-board results appear useful for identifying licensure readiness, remediation needs, or review program planning. Claims should remain limited to association and prediction unless causal evidence is available.
+The Discussion should interpret findings in relation to Radiologic Technology education and comparable allied health literature. It should explain whether clustered academic grades and pre-board grades per cluster are useful for identifying RTLE readiness, remediation needs, review planning, and batch-level monitoring. Claims should remain limited to association, prediction, incremental predictive value, and across-batch comparison unless causal evidence is available.
 
 ## Conclusion Scope
-The conclusion should answer the research questions directly and cautiously. It should identify which predictors were useful, if supported by actual analysis, and note limitations of retrospective institutional data.
+The conclusion should answer the updated study objectives directly and cautiously. It should identify which clustered academic or pre-board predictor set was useful, if supported by actual analysis, and note limitations of retrospective institutional data.
 
 ## Recommendations Scope
 Recommendations may address:
 - Early identification of at-risk students.
 - Strengthening pre-board examination alignment with licensure competencies.
-- Use of academic and clinical indicators for advising and remediation.
+- Use of clustered academic and pre-board indicators for advising and remediation.
 - Improvement of terminal competency assessments.
 - Future research using larger, multi-institutional samples.
 
@@ -469,7 +477,7 @@ Extract the following fields from each included source:
 - Flag unverifiable, incomplete, or possibly fabricated references for correction.
 
 ## Final Quality Checks
-- The manuscript must remain focused on academic performance, pre-board examination results, and licensure success.
+- The manuscript must remain focused on clustered academic grades, pre-board grades per cluster, RTLE performance, licensure success, and across-batch comparison.
 - All claims must be supported by data or cited literature.
 - Missing details must remain marked as To be confirmed until verified.
 - The final paper should not overgeneralize beyond the sampled graduates and institutional context.

@@ -45,11 +45,11 @@ Multiple Philippine Radiologic Technology (RT) and related radiography studies r
 - discussion
 - recommendations
 
-## Theme 2: Overall academic performance and professional-course grades as predictors
+## Theme 2: Clustered academic performance and professional-course grade groups as predictors
 
 ### Summary
 
-Evidence from both RT-specific and allied-health studies supports overall academic performance (GWA/GPA) and professional-course grades as meaningful predictors of licensure/certification outcomes. Meta-analysis in PT shows strong correlations for in-program GPAs; dentistry and radiography studies likewise show positive associations between GWA/professional course averages and licensure scores. Professional-course averages may perform as strong discriminators in multivariable models.
+Evidence from both RT-specific and allied-health studies supports overall academic performance (GWA/GPA) and professional-course grade groups as meaningful predictors of licensure/certification outcomes. For the current study, this evidence supports the cautious use of clustered academic grades as the primary academic predictor set. Meta-analysis in PT shows strong correlations for in-program GPAs; dentistry and radiography studies likewise show positive associations between GWA/professional course averages and licensure scores. Professional-course averages may perform as strong discriminators in multivariable models.
 
 ### Direct evidence
 
@@ -69,7 +69,7 @@ Evidence from both RT-specific and allied-health studies supports overall academ
 
 ### Methodological notes
 
-- Operationalization of GWA/professional-course averages varies across institutions; mapping and scale conversion should be confirmed when pooling or comparing data.
+- Operationalization of GWA/professional-course averages varies across institutions; for this study, course-to-cluster mapping, cluster weighting, and scale conversion should be confirmed before comparing or modeling clustered academic grades.
 - Meta-analytic evidence supports prioritizing in-program GPA as a predictor but underscores heterogeneity across studies and disciplines.
 
 ### Limitations/cautions

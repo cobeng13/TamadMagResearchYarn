@@ -72,7 +72,7 @@ Extract the following fields from each included source:
 - Flag unverifiable, incomplete, or possibly fabricated references for correction.
 
 ## Final Quality Checks
-- The manuscript must remain focused on academic performance, pre-board examination results, and licensure success.
+- The manuscript must remain focused on clustered academic grades, pre-board grades per cluster, RTLE performance, licensure success, and across-batch comparison.
 - All claims must be supported by data or cited literature.
 - Missing details must remain marked as To be confirmed until verified.
 - The final paper should not overgeneralize beyond the sampled graduates and institutional context.

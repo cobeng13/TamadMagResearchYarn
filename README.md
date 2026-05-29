@@ -2,7 +2,7 @@
 
 Research Agent is a local, file-based academic writing workflow for turning study notes, source documents, statistical outputs, and evidence tables into a structured manuscript draft. It is designed for cautious research writing: each stage reads local files, writes explicit intermediate artifacts, and avoids inventing sources, citations, statistics, findings, or conclusions.
 
-The included sample project is focused on predicting Radiologic Technologist Licensure Examination success from academic performance and pre-board examination results, but the workflow can be adapted to other research topics by changing the project brief and prompts.
+The included sample project is focused on predicting Radiologic Technologist Licensure Examination performance and licensure success from clustered academic grades and pre-board grades per cluster across batches, but the workflow can be adapted to other research topics by changing the project brief and prompts.
 
 ## What This Repository Can Do
 
@@ -46,7 +46,7 @@ This is not a fully automated web research bot or submission system. The prompt-
 
 The repository currently has two levels of automation:
 
-- **Implemented local/API scripts**: the research brief helper creates a prompt file from study notes; paper discovery scripts can query scholarly APIs, normalize metadata, deduplicate/rank candidate papers, and write canonical candidate records; AI-assisted query generation and candidate screening are available; legal OA PDF queueing/downloading remains explicit; text-bearing PDFs can be converted to raw and cleaned markdown; deterministic citation metadata can be AI-checked against local markdown; cleaned markdown can be used for AI evidence extraction; Stage 05 evidence can be organized into Stage 06 synthesis artifacts; Stage 06 synthesis can be turned into Stage 07 gap-analysis artifacts.
+- **Implemented local/API scripts**: the research brief helper creates a prompt file from study notes; paper discovery scripts can query scholarly APIs, normalize metadata, deduplicate/rank candidate papers, and write canonical candidate records; AI-assisted query generation and candidate screening are available; legal OA PDF queueing/downloading remains explicit; text-bearing PDFs can be converted to raw and cleaned markdown; deterministic citation metadata can be AI-checked against local markdown; cleaned markdown can be used for AI evidence extraction; Stage 05 evidence can be organized into Stage 06 synthesis artifacts; Stage 06 synthesis can be turned into Stage 07 gap-analysis artifacts; Stage 07B can refine project context for outline and writing agents.
 - **Prompt-guided workflow stages**: source collection decisions, manual cleanup, drafting, outline creation, and audits are still specified by agent prompts. A user or LLM environment must run those prompts and save the requested files.
 
 In practical terms, discovery, ingestion, metadata checking, evidence extraction, synthesis, and gap analysis now have bounded script support. Manuscript writing, statistical interpretation, outline creation, and final review are not autonomous.
@@ -73,6 +73,7 @@ The implemented AI layer is designed around intermediate artifacts, not autonomo
 - Extract structured paper evidence from local cleaned markdown and verified metadata.
 - Build Stage 06 synthesis artifacts from Stage 05 evidence rows and paper summaries.
 - Build Stage 07 gap-analysis artifacts from Stage 06 synthesis outputs.
+- Build Stage 07B refined project-context files from Stage 00 intent, Stage 06 synthesis, and Stage 07 gap analysis.
 
 AI must not invent papers, DOIs, URLs, abstracts, author names, citation counts, PDFs, source text, findings, gap claims, or screening decisions. Any AI-written relevance decision remains a suggestion until a human accepts it, and synthesis/gap-analysis outputs remain intermediate evidence organization and research positioning rather than manuscript prose.
 
@@ -130,6 +131,8 @@ research_agent/
       ai_build_synthesis.py
     gap_analysis/
       ai_gap_analysis.py
+    project_update/
+      ai_update_project_context.py
 ```
 
 ## Core Workflow
@@ -281,7 +284,7 @@ This file is the controlling source for the first stage. It should include the w
 For the included sample project, the topic is:
 
 ```text
-Academic Performance, Pre-Board Examination Results, and Radiologic Technologist Licensure Examination Success
+Predictive value of clustered academic grades and pre-board grades per cluster for Radiologic Technologist Licensure Examination performance and licensure success across batches
 ```
 
 ### 2. Generate the Initial Research Brief Prompt
@@ -840,6 +843,32 @@ This stage prepares safe research positioning for outline and writing stages. It
 
 This stage clarifies what is known, what remains unknown, population or context gaps, methodological gaps, local or Philippine gaps, and variable or measurement gaps.
 
+### AI-Assisted Project Context Update / Cascade Update
+
+A bounded Stage 07B script can create refined context files after synthesis and gap analysis:
+
+```powershell
+python -m scripts.project_update.ai_update_project_context --project projects/sample_project --dry-run
+python -m scripts.project_update.ai_update_project_context --project projects/sample_project --overwrite
+python -m scripts.project_update.ai_update_project_context --project projects/sample_project --overwrite --apply-to-originals
+```
+
+It reads the original `00_brief/` files, Stage 06 synthesis outputs, and Stage 07 gap-analysis outputs, then writes refined Stage 00 context files plus direct handoff files for Stage 08 and Stage 09:
+
+- `00_brief/research_brief_refined.md`
+- `00_brief/research_questions_refined.md`
+- `00_brief/writing_scope_refined.md`
+- `00_brief/agent_instructions_refined.md`
+- `08_outline/_context_for_outline.md`
+- `09_drafts/_context_for_writers.md`
+- `00_brief/project_context_update_summary.md`
+- `00_brief/project_context_changes.csv`
+- `logs/ai_project_context_update_log.md`
+
+It does not overwrite original Stage 00 files by default. Downstream agents should prefer refined files when present, while preserving the original files as initial project intent. `--apply-to-originals` is available only with `--overwrite`; it backs up and replaces only `research_brief.md`, `research_questions.md`, `writing_scope.md`, and `agent_instructions.md`.
+
+This stage updates project framing and downstream instructions; it does not draft manuscript sections. It must use only supplied local files, avoid invented evidence/citations/statistics, mark uncertainty as `To be confirmed.`, and keep direct RTLE/licensure evidence separate from indirect allied-health or education background evidence.
+
 ### Outline Agent
 
 Creates manuscript-level and section-level outlines.
@@ -858,6 +887,91 @@ The workflow plans a Methodology section, but methodology prose is currently exp
 ```text
 projects/sample_project/09_drafts/methodology/methodology_draft.md
 ```
+
+### AI-Assisted Outline Generation
+
+A bounded OpenAI-backed Stage 08 script can create manuscript and section outlines:
+
+```powershell
+python -m scripts.outline.ai_build_outline --project projects/sample_project --dry-run
+python -m scripts.outline.ai_build_outline --project projects/sample_project --overwrite
+```
+
+It prefers refined Stage 00 files and `08_outline/_context_for_outline.md` when present, then falls back to original Stage 00 context. It also reads Stage 06 synthesis, Stage 07 gap-analysis outputs, study notes, and available statistical inputs. It writes:
+
+- `08_outline/manuscript_outline.md`
+- `08_outline/introduction_outline.md`
+- `08_outline/rrl_outline.md`
+- `08_outline/methodology_outline.md`
+- `08_outline/results_outline.md`
+- `08_outline/discussion_outline.md`
+- `08_outline/outline_map.csv`
+- `08_outline/outline_readiness_checklist.md`
+- `logs/ai_outline_log.md`
+
+This stage writes planning artifacts only. It does not draft manuscript prose, invent citations, or invent results. If `input/statistical_results.md` and `input/raw_tables/` are missing or empty, the Results and result-dependent Discussion outline items are marked blocked, planning-only, or `To be confirmed.`
+
+### Stage 08B Human Input Checkpoint
+
+After Stage 08, run a deterministic checkpoint to collect human-only details before drafting:
+
+```powershell
+python -m scripts.human_input.build_input_packet --project projects/sample_project
+python -m scripts.human_input.apply_input_packet --project projects/sample_project
+```
+
+The builder scans outlines and project context for missing human-dependent details such as methodology, sample, institution wording, ethics/privacy handling, variables, statistical outputs, table/figure availability, limitations, and claim boundaries. It writes:
+
+- `human_input/human_input_packet.md`
+- `human_input/human_input_questions.csv`
+- `human_input/human_input_answers.md`
+- `human_input/human_input_status.csv`
+- `logs/human_input_packet_log.md`
+
+The user fills `human_input/human_input_answers.md`. The apply script then stores supplied answers in explicit local input files:
+
+- `input/human_confirmed_context.md`
+- `input/methodology_details.md`
+- `input/statistical_results.md` when statistical outputs are supplied
+- `input/results_availability.md`
+- `human_input/human_input_apply_report.md`
+- `logs/human_input_apply_log.md`
+
+This checkpoint prevents writing agents from inventing methodology, results, ethics, local context, or other human-only details. Unknown items remain `To be confirmed.`
+
+### Stage 10A Statistical Results Ingestion and Interpretation
+
+After human input has been applied, place AI-readable statistical outputs in:
+
+```text
+projects/sample_project/statresults/
+```
+
+Then compile the local statistical files and generate bounded interpretation notes:
+
+```powershell
+python -m scripts.results.ingest_statresults --project projects/sample_project
+python -m scripts.results.ai_interpret_results --project projects/sample_project --dry-run
+python -m scripts.results.ai_interpret_results --project projects/sample_project --overwrite
+```
+
+`ingest_statresults` is deterministic. It reads files from `statresults/` and optionally `input/raw_tables/`, then writes:
+
+- `input/statistical_results_manifest.csv`
+- `input/statistical_results_compiled.md`
+- `input/results_availability.md`
+- `logs/statresults_ingest_log.md`
+
+`ai_interpret_results` maps supplied results to objectives or research questions and writes:
+
+- `09_drafts/results/results_interpretation_notes.md`
+- `09_drafts/results/results_table_notes.md`
+- `09_drafts/results/missing_results_to_confirm.md`
+- `09_drafts/results/results_by_objective.csv`
+- `09_drafts/results/statistical_findings_matrix.csv`
+- `logs/ai_results_interpretation_log.md`
+
+This stage produces interpretation notes and result mapping only. It does not write polished Results prose, draft the Discussion, run new analyses, or invent statistics, p-values, coefficients, sample sizes, effect sizes, tables, figures, or significance claims.
 
 ### Introduction and RRL Writer Agent
 
@@ -985,14 +1099,14 @@ The sample project currently contains:
 
 The sample project brief is already aligned to the current predictive-validation positioning:
 
-- academic performance;
-- professional course grades and course-cluster grades;
+- clustered academic grades;
+- pre-board grades per cluster;
 - internship or clinical performance;
-- pre-board examination results;
 - terminal competency or comprehensive examination results, if available;
-- Radiologic Technologist Licensure Examination rating;
+- Radiologic Technologist Licensure Examination board examination grades per cluster;
 - pass/fail licensure outcome;
-- subject-area licensure performance, if available.
+- overall Radiologic Technologist Licensure Examination rating, if available;
+- across-batch comparison.
 
 The sample project has also been manually reviewed after local PDF/markdown placement to repair citation-key propagation. Stable local paper IDs were assigned for no-DOI local sources, exact synthesis citation keys were restored where DOI paper IDs were already present, stale local path prefixes were corrected, and affected Stage 05 summary filenames were renamed away from `to-be-confirmed_*`. The repair log is:
 
@@ -1039,18 +1153,21 @@ One known convention remains: prompts are hard-coded to `projects/sample_project
 10. Run `python -m scripts.evidence_extraction.ai_extract_evidence --project projects/sample_project --limit 19 --overwrite`, then review the Stage 05 outputs or use the Evidence Extraction Agent prompt for manual extraction/cleanup.
 11. Run `python -m scripts.synthesis.ai_build_synthesis --project projects/sample_project --overwrite`, then review the Stage 06 outputs or use the Synthesis Matrix Agent prompt for manual cleanup.
 12. Run `python -m scripts.gap_analysis.ai_gap_analysis --project projects/sample_project --overwrite`, then review Stage 07 research positioning outputs or use the Gap Analysis Agent prompt for manual cleanup.
-13. Run the Outline Agent.
-14. Draft or supply `09_drafts/methodology/methodology_draft.md` if a Methodology section is needed.
-15. Run the Introduction and RRL Writer Agent.
-16. Add verified statistical outputs to `input/statistical_results.md` and/or `input/raw_tables/`.
-17. Run the Results Interpreter Agent.
-18. Run the Results Writer Agent.
-19. Run the Discussion Writer Agent.
-20. Run the Citation Audit Agent.
-21. Run the Claim Audit Agent.
-22. Run the Style and Formatting Agent.
-23. Run the Final Assembly Agent.
-24. Review `11_final/full_manuscript_draft.md` and `11_final/final_revision_notes.md`.
+13. Run `python -m scripts.project_update.ai_update_project_context --project projects/sample_project --overwrite`, then review refined context files before outlining.
+14. Run `python -m scripts.outline.ai_build_outline --project projects/sample_project --overwrite`, then review Stage 08 outputs before writing.
+15. Run `python -m scripts.human_input.build_input_packet --project projects/sample_project`, fill `projects/sample_project/human_input/human_input_answers.md`, then run `python -m scripts.human_input.apply_input_packet --project projects/sample_project`.
+16. Draft or supply `09_drafts/methodology/methodology_draft.md` if a Methodology section is needed.
+17. Run the Introduction and RRL Writer Agent.
+18. Add verified statistical outputs to `projects/sample_project/statresults/`.
+19. Run `python -m scripts.results.ingest_statresults --project projects/sample_project --overwrite`.
+20. Run `python -m scripts.results.ai_interpret_results --project projects/sample_project --overwrite`, then review `09_drafts/results/results_interpretation_notes.md`, `results_table_notes.md`, and `missing_results_to_confirm.md`.
+21. Run the Results Writer Agent.
+22. Run the Discussion Writer Agent.
+23. Run the Citation Audit Agent.
+24. Run the Claim Audit Agent.
+25. Run the Style and Formatting Agent.
+26. Run the Final Assembly Agent.
+27. Review `11_final/full_manuscript_draft.md` and `11_final/final_revision_notes.md`.
 
 ## Reusing for Another Project
 
